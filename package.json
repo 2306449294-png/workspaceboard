@@ -1,0 +1,18 @@
+{
+  "name": "workspace-board",
+  "version": "1.0.0",
+  "description": "工位盘点看板共享服务",
+  "main": "shared-server.js",
+  "scripts": {
+    "start": "node shared-server.js"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "ws": "^8.20.1"
+  }
+}

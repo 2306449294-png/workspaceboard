@@ -1,0 +1,1983 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>工位盘点看板</title>
+<style>
+* { margin:0; padding:0; box-sizing:border-box; }
+body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif; background:#f0f2f5; color:#333; }
+.header { background:linear-gradient(135deg,#1a1a2e,#16213e,#0f3460); color:#fff; padding:24px 32px; }
+.header h1 { font-size:24px; margin-bottom:4px; }
+.header .subtitle { font-size:13px; opacity:0.7; }
+.stats-bar { display:flex; gap:16px; padding:16px 32px; background:#fff; border-bottom:1px solid #e8e8e8; flex-wrap:wrap; }
+.stat-card { flex:1; min-width:140px; background:#f8f9fa; border-radius:10px; padding:16px; text-align:center; border:1px solid #eee; }
+.stat-card .num { font-size:28px; font-weight:700; color:#0f3460; }
+.stat-card .label { font-size:12px; color:#888; margin-top:4px; }
+.stat-card.used .num { color:#52c41a; }
+.stat-card.unused .num { color:#ff4d4f; }
+.stat-card.rate .num { color:#1890ff; }
+.tabs { display:flex; background:#fff; padding:0 32px; border-bottom:1px solid #e8e8e8; gap:0; }
+.tab { padding:12px 20px; cursor:pointer; font-size:14px; color:#666; border-bottom:2px solid transparent; transition:all .2s; user-select:none; }
+.tab:hover { color:#0f3460; }
+.tab.active { color:#0f3460; border-bottom-color:#0f3460; font-weight:600; }
+.content { padding:24px 32px; max-width:1400px; margin:0 auto; }
+.panel { display:none; }
+.panel.active { display:block; }
+table { width:100%; border-collapse:collapse; background:#fff; border-radius:10px; overflow:hidden; box-shadow:0 1px 3px rgba(0,0,0,0.08); }
+th { background:#fafafa; padding:12px 16px; text-align:left; font-size:13px; font-weight:600; color:#555; border-bottom:2px solid #e8e8e8; white-space:nowrap; cursor:pointer; user-select:none; }
+th:hover { background:#f0f0f0; }
+th .sort-arrow { margin-left:4px; font-size:10px; }
+td { padding:10px 16px; font-size:13px; border-bottom:1px solid #f0f0f0; }
+tr:hover td { background:#f8f9ff; }
+.group-row td { background:#f0f4ff !important; font-weight:600; font-size:14px; padding:10px 16px; border-bottom:1px solid #d0d8f0; color:#0f3460; }
+.summary-row td { background:#fafafa; font-weight:500; font-size:12px; color:#666; border-bottom:1px solid #e0e0e0; }
+.badge { display:inline-block; padding:2px 10px; border-radius:12px; font-size:12px; font-weight:500; }
+.badge-used { background:#f6ffed; color:#52c41a; border:1px solid #b7eb8f; }
+.badge-unused { background:#fff2f0; color:#ff4d4f; border:1px solid #ffccc7; }
+.badge-18 { background:#e6f7ff; color:#1890ff; border:1px solid #91d5ff; }
+.badge-17 { background:#fff7e6; color:#fa8c16; border:1px solid #ffd591; }
+.toolbar { display:flex; gap:12px; margin-bottom:16px; align-items:center; flex-wrap:wrap; }
+.toolbar input, .toolbar select { padding:8px 12px; border:1px solid #d9d9d9; border-radius:6px; font-size:13px; outline:none; }
+.toolbar input:focus, .toolbar select:focus { border-color:#1890ff; box-shadow:0 0 0 2px rgba(24,144,255,0.1); }
+.toolbar input { width:240px; }
+.btn { padding:8px 16px; border:none; border-radius:6px; font-size:13px; cursor:pointer; font-weight:500; transition:all .2s; }
+.btn-primary { background:#0f3460; color:#fff; }
+.btn-primary:hover { background:#1a4a80; }
+.btn-outline { background:#fff; color:#0f3460; border:1px solid #0f3460; }
+.btn-outline:hover { background:#f0f4ff; }
+.edit-input { width:100%; padding:6px 10px; border:1px solid #d9d9d9; border-radius:4px; font-size:13px; }
+.edit-select { padding:6px 10px; border:1px solid #d9d9d9; border-radius:4px; font-size:13px; background:#fff; }
+.edit-actions { display:flex; gap:4px; }
+.btn-sm { padding:4px 10px; font-size:12px; border-radius:4px; border:1px solid #d9d9d9; background:#fff; cursor:pointer; }
+.btn-sm.save { background:#52c41a; color:#fff; border-color:#52c41a; }
+.btn-sm.cancel { color:#666; }
+.summary-bar { display:flex; gap:12px; margin-bottom:16px; flex-wrap:wrap; }
+.summary-item { background:#fff; padding:8px 16px; border-radius:6px; font-size:13px; border:1px solid #eee; }
+.summary-item strong { color:#0f3460; }
+.dashboard-title { font-size:18px; font-weight:700; color:#0f3460; margin-bottom:16px; padding-bottom:8px; border-bottom:2px solid #0f3460; }
+.dashboard-section { background:#fff; border-radius:10px; padding:20px; margin-bottom:20px; box-shadow:0 1px 3px rgba(0,0,0,0.08); }
+.dashboard-section h3 { font-size:15px; font-weight:600; color:#0f3460; margin-bottom:12px; padding-bottom:8px; border-bottom:1px solid #eee; }
+.dashboard-flex { display:flex; gap:20px; flex-wrap:wrap; }
+.dashboard-flex > div { flex:1; min-width:350px; }
+.cross-table { width:100%; border-collapse:collapse; }
+.cross-table th { background:#0f3460; color:#fff; padding:10px 16px; text-align:center; font-size:13px; }
+.cross-table td { padding:10px 16px; text-align:center; font-size:13px; border:1px solid #e8e8e8; }
+.cross-table .total-row td { background:#f0f4ff; font-weight:700; }
+.cross-table .total-col { background:#fafafa; font-weight:600; }
+.leader-table { width:100%; border-collapse:collapse; }
+.leader-table th { background:#fafafa; padding:8px 12px; text-align:left; font-size:12px; color:#555; }
+.leader-table td { padding:6px 12px; font-size:13px; border-bottom:1px solid #f0f0f0; }
+.leader-table .bar-cell { position:relative; }
+.leader-table .bar-bg { height:18px; border-radius:3px; min-width:2px; transition:width .3s; }
+.leader-table .bar-17 { background:linear-gradient(90deg,#fa8c16,#ffc069); }
+.leader-table .bar-18 { background:linear-gradient(90deg,#1890ff,#69c0ff); }
+.leader-table .pct { font-size:12px; color:#888; }
+
+/* Floor Plan Styles */
+.floorplan-container { background:#fff; border-radius:10px; padding:16px; box-shadow:0 1px 3px rgba(0,0,0,0.08); margin-bottom:20px; overflow-x:auto; }
+.floorplan-title { font-size:16px; font-weight:700; color:#0f3460; margin-bottom:12px; padding-bottom:8px; border-bottom:2px solid #0f3460; }
+.floorplan-grid { display:inline-block; font-family:monospace; line-height:1; }
+.floorplan-row { display:flex; }
+.floorplan-cell { width:22px; height:22px; display:flex; align-items:center; justify-content:center; font-size:7px; color:#333; border:1px solid #e0e0e0; box-sizing:border-box; cursor:pointer; transition:all .15s; position:relative; flex-shrink:0; }
+.floorplan-cell.empty { background:#fafafa; border-color:#f0f0f0; }
+.floorplan-cell.seat { font-weight:700; }
+.floorplan-cell.seat:hover { transform:scale(1.3); z-index:10; box-shadow:0 2px 8px rgba(0,0,0,0.2); border-color:#666; }
+.floorplan-cell.seat.no-color { background:#fff; }
+.floorplan-legend { display:flex; flex-wrap:wrap; gap:8px; margin-bottom:10px; padding-bottom:10px; border-bottom:1px solid #eee; }
+.floorplan-legend-item { display:flex; align-items:center; gap:4px; font-size:11px; }
+.floorplan-legend-color { width:14px; height:14px; border-radius:2px; border:1px solid #ddd; flex-shrink:0; }
+.floorplan-section-label { font-size:11px; font-weight:700; color:#888; padding:4px 0; margin-top:8px; }
+
+
+/* Exact replica floor plan */
+.exact-floorplan { background:#fff; border-radius:10px; padding:16px; box-shadow:0 1px 3px rgba(0,0,0,0.08); overflow-x:auto; }
+.exact-grid { display:inline-block; border:1px solid #ccc; }
+.exact-row { display:flex; }
+.exact-cell { width:32px; height:32px; display:flex; align-items:center; justify-content:center; font-size:9px; color:#333; border-right:1px solid #e0e0e0; border-bottom:1px solid #e0e0e0; box-sizing:border-box; flex-shrink:0; }
+.exact-cell:last-child { border-right:none; }
+.exact-row:last-child .exact-cell { border-bottom:none; }
+.exact-cell.empty { background:#fff; }
+.exact-cell.has-data { font-weight:500; cursor:pointer; }
+.exact-cell.has-data:hover { outline:2px solid #333; z-index:10; position:relative; }
+.exact-cell.has-data.is-num { font-size:10px; }
+.exact-cell.has-data.is-text { font-size:8px; font-weight:700; color:#555; }
+.exact-cell.has-data.is-facility { font-size:10px; font-weight:700; color:#444; text-align:center; line-height:1.2; }
+.exact-legend { display:flex; flex-wrap:wrap; gap:8px 16px; margin-bottom:10px; font-size:11px; color:#666; }
+.exact-legend .legend-item { display:inline-flex; align-items:center; gap:4px; }
+.exact-legend .legend-swatch { display:inline-block; width:14px; height:14px; border-radius:2px; border:1px solid #ccc; }
+
+
+/* Floor plan cell styles */
+.fp-cell { width:26px; height:26px; display:flex; align-items:center; justify-content:center; font-size:8px; color:#333; border-right:1px solid #e8e8e8; border-bottom:1px solid #e8e8e8; box-sizing:border-box; flex-shrink:0; transition:all .15s; user-select:none; }
+.fp-cell:first-child { border-left:1px solid #e8e8e8; }
+.fp-empty { background:#fafafa; }
+.fp-facility { background:#E8E0D8; font-size:9px; font-weight:700; color:#666; text-align:center; cursor:default; }
+.fp-seat { font-weight:500; cursor:grab; font-size:8px; }
+.fp-seat:active { cursor:grabbing; }
+.fp-seat:hover { outline:2px solid #333; z-index:10; position:relative; }
+.fp-seat.dragging { opacity:0.35; outline:2px dashed #333; }
+.fp-seat.drag-over { outline:3px solid #0f3460 !important; z-index:20; transform:scale(1.15); position:relative; background-image:repeating-linear-gradient(45deg,transparent,transparent 3px,rgba(15,52,96,.08) 3px,rgba(15,52,96,.08) 6px) !important; }
+.fp-empty.drag-over { outline:2px dashed #52c41a; background:#f0fff0; transform:scale(1.1); z-index:10; position:relative; }
+
+
+
+
+.fp-white-block{background:#fff;border:1px solid #ddd;cursor:grab;display:flex;align-items:center;justify-content:center;color:#333;user-select:none;font-size:8px}
+.fp-white-block:hover{box-shadow:0 2px 8px rgba(0,0,0,.1);border-color:#666}
+.fp-white-block.selected{outline:2px solid #1890ff;outline-offset:-2px;background:#f0f8ff}
+.fp-merged-block{width:100%;height:100%;box-sizing:border-box;background:#fff;border:1px solid #bbb;cursor:grab;display:flex;align-items:center;justify-content:center;color:#333;user-select:none;text-align:center;line-height:1.4;overflow:hidden}
+.fp-merged-block:hover{box-shadow:0 4px 12px rgba(0,0,0,.12);border-color:#666}
+.fp-merged-block.selected{outline:3px solid #1890ff;outline-offset:-3px;background:#f0f8ff}
+.fp-merged-block .merged-name{word-break:break-all;max-width:100%;padding:4px}
+#fp-context-menu{position:fixed;z-index:9999;background:#fff;border:1px solid #ccc;border-radius:6px;box-shadow:0 4px 12px rgba(0,0,0,.15);min-width:140px;padding:4px 0;display:none}
+#fp-context-menu .menu-item{padding:8px 12px;cursor:pointer;font-size:13px;display:block;border:none;background:none;text-align:left;width:100%}
+#fp-context-menu .menu-item:hover{background:#f5f5f5}
+#fp-context-menu .menu-item.danger{color:#ff4d4f}
+#fp-context-menu .menu-item:disabled{color:#ccc;cursor:not-allowed}
+
+.fp-white-block{background:#fff;border:1px solid #ddd;cursor:grab;display:flex;align-items:center;justify-content:center;color:#333;user-select:none;font-size:8px}
+.fp-white-block:hover{box-shadow:0 2px 8px rgba(0,0,0,.1);border-color:#666}
+.fp-white-block.selected{outline:2px solid #1890ff;outline-offset:-2px;background:#f0f8ff}
+.fp-merged-block{width:100%;height:100%;box-sizing:border-box;background:#fff;border:1px solid #bbb;cursor:grab;display:flex;align-items:center;justify-content:center;color:#333;user-select:none;text-align:center;line-height:1.4;overflow:hidden}
+.fp-merged-block:hover{box-shadow:0 4px 12px rgba(0,0,0,.12);border-color:#666}
+.fp-merged-block.selected{outline:3px solid #1890ff;outline-offset:-3px;background:#f0f8ff}
+.fp-merged-block .merged-name{word-break:break-all;max-width:100%;padding:4px}
+#fp-context-menu{position:fixed;z-index:9999;background:#fff;border:1px solid #ccc;border-radius:6px;box-shadow:0 4px 12px rgba(0,0,0,.15);min-width:140px;padding:4px 0;display:none}
+#fp-context-menu .menu-item{padding:8px 12px;cursor:pointer;font-size:13px;display:block;border:none;background:none;text-align:left;width:100%}
+#fp-context-menu .menu-item:hover{background:#f5f5f5}
+#fp-context-menu .menu-item.danger{color:#ff4d4f}
+#fp-context-menu .menu-item:disabled{color:#ccc;cursor:not-allowed}
+
+.fp-white-block{background:#fff;border:1px solid #ddd;cursor:grab;display:flex;align-items:center;justify-content:center;color:#333;user-select:none;font-size:8px}
+.fp-white-block:hover{box-shadow:0 2px 8px rgba(0,0,0,.1);border-color:#666}
+.fp-white-block.selected{outline:2px solid #1890ff;outline-offset:-2px;background:#f0f8ff}
+.fp-merged-block{width:100%;height:100%;box-sizing:border-box;background:#fff;border:1px solid #bbb;cursor:grab;display:flex;align-items:center;justify-content:center;color:#333;user-select:none;text-align:center;line-height:1.4;overflow:hidden}
+.fp-merged-block:hover{box-shadow:0 4px 12px rgba(0,0,0,.12);border-color:#666}
+.fp-merged-block.selected{outline:3px solid #1890ff;outline-offset:-3px;background:#f0f8ff}
+.fp-merged-block .merged-name{word-break:break-all;max-width:100%;padding:4px}
+#fp-context-menu{position:fixed;z-index:9999;background:#fff;border:1px solid #ccc;border-radius:6px;box-shadow:0 4px 12px rgba(0,0,0,.15);min-width:140px;padding:4px 0;display:none}
+#fp-context-menu .menu-item{padding:8px 12px;cursor:pointer;font-size:13px;display:block;border:none;background:none;text-align:left;width:100%}
+#fp-context-menu .menu-item:hover{background:#f5f5f5}
+#fp-context-menu .menu-item.danger{color:#ff4d4f}
+#fp-context-menu .menu-item:disabled{color:#ccc;cursor:not-allowed}
+/* ── 打印样式 ── */
+@media print {
+  body { background:#fff !important; }
+  .header, .stats-bar, .tabs, .toolbar, .content > *:not(.panel) { display:none !important; }
+  .content { padding:0 !important; max-width:none !important; margin:0 !important; }
+  .panel { display:none !important; }
+  .panel.printing { display:block !important; }
+  .panel.printing > div:first-of-type { display:none !important; }
+  .panel.printing > div:nth-of-type(2) { display:none !important; }
+  .panel.printing [id$="-grid"] { overflow:visible !important; max-width:none !important; border:none !important; }
+  .fp-cell { border-color:#999 !important; width:24px !important; height:24px !important; font-size:7px !important; }
+  .fp-empty { background:#fff !important; border-color:#ddd !important; }
+  .fp-seat { -webkit-print-color-adjust:exact; print-color-adjust:exact; font-size:6px !important; }
+  .fp-seat:hover { outline:none !important; }
+  .fp-white-block { background:#fff !important; border-color:#aaa !important; }
+  .fp-merged-block { width:100% !important; height:100% !important; background:#fff !important; border-color:#666 !important; -webkit-print-color-adjust:exact; print-color-adjust:exact; }
+  @page { size:A3 landscape; margin:8mm; }
+}
+</style>
+</head>
+<body>
+
+<div class="header">
+  <h1>🏢 工位盘点看板</h1>
+  <div class="subtitle">18F（321工位） + 17F（172工位） · 总计 493 工位</div>
+</div>
+
+<div class="stats-bar">
+  <div class="stat-card used"><div class="num" id="totalUsed">-</div><div class="label">已使用</div></div>
+  <div class="stat-card unused"><div class="num" id="totalUnused">-</div><div class="label">未使用</div></div>
+  <div class="stat-card rate"><div class="num" id="totalRate">-</div><div class="label">总使用率</div></div>
+  <div class="stat-card"><div class="num" id="f18Used">-</div><div class="label">18F 已使用 / 321</div></div>
+  <div class="stat-card"><div class="num" id="f17Used">-</div><div class="label">17F 已使用 / 172</div></div>
+</div>
+
+<div class="tabs">
+  <div class="tab active" data-panel="dashboard">📊 首页看板</div>
+  <div class="tab" data-panel="floor">📊 楼层汇总</div>
+  <div class="tab" data-panel="leader">👥 组长明细</div>
+  <div class="tab" data-panel="f18">🗺️ 18F工位图</div>
+  <div class="tab" data-panel="f17">🗺️ 17F工位图</div>
+  <div class="tab" data-panel="team">🏢 团队汇总</div>
+</div>
+
+<div class="content">
+  <div class="toolbar" id="toolbar">
+    <input type="text" id="searchInput" placeholder="🔍 搜索工位号、组长、团队..." oninput="applyFilters()">
+    <select id="floorFilter" onchange="applyFilters()">
+      <option value="">全部楼层</option>
+      <option value="18F">18F</option>
+      <option value="17F">17F</option>
+    </select>
+    <select id="statusFilter" onchange="applyFilters()">
+      <option value="">全部状态</option>
+      <option value="used">已使用</option>
+      <option value="unused">未使用</option>
+    </select>
+    <button class="btn btn-outline" onclick="resetFilters()">重置筛选</button>
+    <button class="btn btn-primary" onclick="exportCSV()">📥 导出 CSV</button>
+  </div>
+
+  <div id="panel-dashboard" class="panel active"></div>
+  <div id="panel-floor" class="panel"></div>
+  <div id="panel-leader" class="panel"></div>
+  <div id="panel-team" class="panel"></div><div id="panel-f18" class="panel"></div>
+  <div id="panel-f17" class="panel"></div>
+  
+</div>
+
+<div class="footer">工位盘点看板 · 双击工位行可编辑 · 数据修改后自动保存到本地</div>
+
+<script>
+// ===== DATA =====
+const WORKSPACES = [
+  {floor:"17F",seat:1,leader:"李健华",team:"第二交付",status:"used"},
+  {floor:"17F",seat:10,leader:"未分配",team:"未分配",status:"unused"},
+  {floor:"17F",seat:100,leader:"李健华",team:"第二交付",status:"used"},
+  {floor:"17F",seat:101,leader:"李健华",team:"第二交付",status:"used"},
+  {floor:"17F",seat:102,leader:"李健华",team:"第二交付",status:"used"},
+  {floor:"17F",seat:103,leader:"李健华",team:"第二交付",status:"used"},
+  {floor:"17F",seat:104,leader:"李健华",team:"第二交付",status:"used"},
+  {floor:"17F",seat:105,leader:"李健华",team:"第二交付",status:"used"},
+  {floor:"17F",seat:106,leader:"李健华",team:"第二交付",status:"used"},
+  {floor:"17F",seat:107,leader:"李健华",team:"第二交付",status:"used"},
+  {floor:"17F",seat:108,leader:"王思婷",team:"第二交付",status:"used"},
+  {floor:"17F",seat:109,leader:"王思婷",team:"第二交付",status:"used"},
+  {floor:"17F",seat:11,leader:"未分配",team:"未分配",status:"unused"},
+  {floor:"17F",seat:110,leader:"王思婷",team:"第二交付",status:"used"},
+  {floor:"17F",seat:111,leader:"王思婷",team:"第二交付",status:"used"},
+  {floor:"17F",seat:112,leader:"王思婷",team:"第二交付",status:"used"},
+  {floor:"17F",seat:113,leader:"王思婷",team:"第二交付",status:"used"},
+  {floor:"17F",seat:114,leader:"王思婷",team:"第二交付",status:"used"},
+  {floor:"17F",seat:115,leader:"王思婷",team:"第二交付",status:"used"},
+  {floor:"17F",seat:116,leader:"王思婷",team:"第二交付",status:"used"},
+  {floor:"17F",seat:117,leader:"王思婷",team:"第二交付",status:"used"},
+  {floor:"17F",seat:118,leader:"王思婷",team:"第二交付",status:"used"},
+  {floor:"17F",seat:119,leader:"王思婷",team:"第二交付",status:"used"},
+  {floor:"17F",seat:12,leader:"秦小曼",team:"第一交付",status:"used"},
+  {floor:"17F",seat:120,leader:"王思婷",team:"第二交付",status:"used"},
+  {floor:"17F",seat:121,leader:"王思婷",team:"第二交付",status:"used"},
+  {floor:"17F",seat:122,leader:"王思婷",team:"第二交付",status:"used"},
+  {floor:"17F",seat:123,leader:"王思婷",team:"第二交付",status:"used"},
+  {floor:"17F",seat:124,leader:"王思婷",team:"第二交付",status:"used"},
+  {floor:"17F",seat:125,leader:"王思婷",team:"第二交付",status:"used"},
+  {floor:"17F",seat:126,leader:"未分配",team:"未分配",status:"unused"},
+  {floor:"17F",seat:127,leader:"未分配",team:"未分配",status:"unused"},
+  {floor:"17F",seat:128,leader:"未分配",team:"未分配",status:"unused"},
+  {floor:"17F",seat:129,leader:"王思婷",team:"第二交付",status:"used"},
+  {floor:"17F",seat:13,leader:"未分配",team:"未分配",status:"unused"},
+  {floor:"17F",seat:130,leader:"王思婷",team:"第二交付",status:"used"},
+  {floor:"17F",seat:131,leader:"齐慧",team:"第二交付",status:"used"},
+  {floor:"17F",seat:132,leader:"未分配",team:"未分配",status:"unused"},
+  {floor:"17F",seat:133,leader:"齐慧",team:"第二交付",status:"used"},
+  {floor:"17F",seat:134,leader:"齐慧",team:"第二交付",status:"used"},
+  {floor:"17F",seat:135,leader:"齐慧",team:"第二交付",status:"used"},
+  {floor:"17F",seat:136,leader:"齐慧",team:"第二交付",status:"used"},
+  {floor:"17F",seat:137,leader:"齐慧",team:"第二交付",status:"used"},
+  {floor:"17F",seat:138,leader:"齐慧",team:"第二交付",status:"used"},
+  {floor:"17F",seat:139,leader:"齐慧",team:"第二交付",status:"used"},
+  {floor:"17F",seat:14,leader:"秦小曼",team:"第一交付",status:"used"},
+  {floor:"17F",seat:140,leader:"齐慧",team:"第二交付",status:"used"},
+  {floor:"17F",seat:141,leader:"未分配",team:"未分配",status:"unused"},
+  {floor:"17F",seat:142,leader:"未分配",team:"未分配",status:"unused"},
+  {floor:"17F",seat:143,leader:"齐慧",team:"第二交付",status:"used"},
+  {floor:"17F",seat:144,leader:"齐慧",team:"第二交付",status:"used"},
+  {floor:"17F",seat:145,leader:"未分配",team:"未分配",status:"unused"},
+  {floor:"17F",seat:146,leader:"未分配",team:"未分配",status:"unused"},
+  {floor:"17F",seat:147,leader:"未分配",team:"未分配",status:"unused"},
+  {floor:"17F",seat:148,leader:"未分配",team:"未分配",status:"unused"},
+  {floor:"17F",seat:149,leader:"未分配",team:"未分配",status:"unused"},
+  {floor:"17F",seat:15,leader:"未分配",team:"未分配",status:"unused"},
+  {floor:"17F",seat:150,leader:"佳森+宗展",team:"第二交付",status:"used"},
+  {floor:"17F",seat:151,leader:"佳森+宗展",team:"第二交付",status:"used"},
+  {floor:"17F",seat:152,leader:"佳森+宗展",team:"第二交付",status:"used"},
+  {floor:"17F",seat:153,leader:"佳森+宗展",team:"第二交付",status:"used"},
+  {floor:"17F",seat:154,leader:"未分配",team:"未分配",status:"unused"},
+  {floor:"17F",seat:155,leader:"未分配",team:"未分配",status:"unused"},
+  {floor:"17F",seat:156,leader:"未分配",team:"未分配",status:"unused"},
+  {floor:"17F",seat:157,leader:"未分配",team:"未分配",status:"unused"},
+  {floor:"17F",seat:158,leader:"未分配",team:"未分配",status:"unused"},
+  {floor:"17F",seat:159,leader:"未分配",team:"未分配",status:"unused"},
+  {floor:"17F",seat:16,leader:"秦小曼",team:"第一交付",status:"used"},
+  {floor:"17F",seat:160,leader:"未分配",team:"未分配",status:"unused"},
+  {floor:"17F",seat:161,leader:"未分配",team:"未分配",status:"unused"},
+  {floor:"17F",seat:162,leader:"秦小曼",team:"第一交付",status:"used"},
+  {floor:"17F",seat:163,leader:"秦小曼",team:"第一交付",status:"used"},
+  {floor:"17F",seat:164,leader:"秦小曼",team:"第一交付",status:"used"},
+  {floor:"17F",seat:165,leader:"秦小曼",team:"第一交付",status:"used"},
+  {floor:"17F",seat:166,leader:"未分配",team:"未分配",status:"unused"},
+  {floor:"17F",seat:167,leader:"秦小曼",team:"第一交付",status:"used"},
+  {floor:"17F",seat:168,leader:"秦小曼",team:"第一交付",status:"used"},
+  {floor:"17F",seat:169,leader:"秦小曼",team:"第一交付",status:"used"},
+  {floor:"17F",seat:17,leader:"秦小曼",team:"第一交付",status:"used"},
+  {floor:"17F",seat:170,leader:"秦小曼",team:"第一交付",status:"used"},
+  {floor:"17F",seat:171,leader:"未分配",team:"未分配",status:"unused"},
+  {floor:"17F",seat:172,leader:"秦小曼",team:"第一交付",status:"used"},
+  {floor:"17F",seat:18,leader:"秦小曼",team:"第一交付",status:"used"},
+  {floor:"17F",seat:19,leader:"秦小曼",team:"第一交付",status:"used"},
+  {floor:"17F",seat:2,leader:"李健华",team:"第二交付",status:"used"},
+  {floor:"17F",seat:20,leader:"秦小曼",team:"第一交付",status:"used"},
+  {floor:"17F",seat:21,leader:"秦小曼",team:"第一交付",status:"used"},
+  {floor:"17F",seat:22,leader:"秦小曼",team:"第一交付",status:"used"},
+  {floor:"17F",seat:23,leader:"秦小曼",team:"第一交付",status:"used"},
+  {floor:"17F",seat:24,leader:"未分配",team:"未分配",status:"unused"},
+  {floor:"17F",seat:25,leader:"未分配",team:"未分配",status:"unused"},
+  {floor:"17F",seat:26,leader:"未分配",team:"未分配",status:"unused"},
+  {floor:"17F",seat:27,leader:"未分配",team:"未分配",status:"unused"},
+  {floor:"17F",seat:28,leader:"未分配",team:"未分配",status:"unused"},
+  {floor:"17F",seat:29,leader:"未分配",team:"未分配",status:"unused"},
+  {floor:"17F",seat:3,leader:"李健华",team:"第二交付",status:"used"},
+  {floor:"17F",seat:30,leader:"李啸天",team:"第二交付",status:"used"},
+  {floor:"17F",seat:31,leader:"未分配",team:"未分配",status:"unused"},
+  {floor:"17F",seat:32,leader:"未分配",team:"未分配",status:"unused"},
+  {floor:"17F",seat:33,leader:"未分配",team:"未分配",status:"unused"},
+  {floor:"17F",seat:34,leader:"李啸天",team:"第二交付",status:"used"},
+  {floor:"17F",seat:35,leader:"李啸天",team:"第二交付",status:"used"},
+  {floor:"17F",seat:36,leader:"李啸天",team:"第二交付",status:"used"},
+  {floor:"17F",seat:37,leader:"李啸天",team:"第二交付",status:"used"},
+  {floor:"17F",seat:38,leader:"李啸天",team:"第二交付",status:"used"},
+  {floor:"17F",seat:39,leader:"李啸天",team:"第二交付",status:"used"},
+  {floor:"17F",seat:4,leader:"未分配",team:"未分配",status:"unused"},
+  {floor:"17F",seat:40,leader:"李啸天",team:"第二交付",status:"used"},
+  {floor:"17F",seat:41,leader:"李啸天",team:"第二交付",status:"used"},
+  {floor:"17F",seat:42,leader:"李啸天",team:"第二交付",status:"used"},
+  {floor:"17F",seat:43,leader:"李啸天",team:"第二交付",status:"used"},
+  {floor:"17F",seat:44,leader:"李啸天",team:"第二交付",status:"used"},
+  {floor:"17F",seat:45,leader:"李啸天",team:"第二交付",status:"used"},
+  {floor:"17F",seat:46,leader:"李啸天",team:"第二交付",status:"used"},
+  {floor:"17F",seat:47,leader:"李啸天",team:"第二交付",status:"used"},
+  {floor:"17F",seat:48,leader:"李啸天",team:"第二交付",status:"used"},
+  {floor:"17F",seat:49,leader:"李啸天",team:"第二交付",status:"used"},
+  {floor:"17F",seat:5,leader:"未分配",team:"未分配",status:"unused"},
+  {floor:"17F",seat:50,leader:"李啸天",team:"第二交付",status:"used"},
+  {floor:"17F",seat:51,leader:"未分配",team:"未分配",status:"unused"},
+  {floor:"17F",seat:52,leader:"李啸天",team:"第二交付",status:"used"},
+  {floor:"17F",seat:53,leader:"李啸天",team:"第二交付",status:"used"},
+  {floor:"17F",seat:54,leader:"李啸天",team:"第二交付",status:"used"},
+  {floor:"17F",seat:55,leader:"未分配",team:"未分配",status:"unused"},
+  {floor:"17F",seat:56,leader:"李啸天",team:"第二交付",status:"used"},
+  {floor:"17F",seat:57,leader:"李啸天",team:"第二交付",status:"used"},
+  {floor:"17F",seat:58,leader:"李啸天",team:"第二交付",status:"used"},
+  {floor:"17F",seat:59,leader:"李啸天",team:"第二交付",status:"used"},
+  {floor:"17F",seat:6,leader:"未分配",team:"未分配",status:"unused"},
+  {floor:"17F",seat:60,leader:"李啸天",team:"第二交付",status:"used"},
+  {floor:"17F",seat:61,leader:"未分配",team:"未分配",status:"unused"},
+  {floor:"17F",seat:62,leader:"李啸天",team:"第二交付",status:"used"},
+  {floor:"17F",seat:63,leader:"李啸天",team:"第二交付",status:"used"},
+  {floor:"17F",seat:64,leader:"李啸天",team:"第二交付",status:"used"},
+  {floor:"17F",seat:65,leader:"李啸天",team:"第二交付",status:"used"},
+  {floor:"17F",seat:66,leader:"李啸天",team:"第二交付",status:"used"},
+  {floor:"17F",seat:67,leader:"李啸天",team:"第二交付",status:"used"},
+  {floor:"17F",seat:68,leader:"李啸天",team:"第二交付",status:"used"},
+  {floor:"17F",seat:69,leader:"李啸天",team:"第二交付",status:"used"},
+  {floor:"17F",seat:7,leader:"未分配",team:"未分配",status:"unused"},
+  {floor:"17F",seat:70,leader:"李啸天",team:"第二交付",status:"used"},
+  {floor:"17F",seat:71,leader:"未分配",team:"未分配",status:"unused"},
+  {floor:"17F",seat:72,leader:"未分配",team:"未分配",status:"unused"},
+  {floor:"17F",seat:73,leader:"刘鑫涛",team:"第二交付",status:"used"},
+  {floor:"17F",seat:74,leader:"刘鑫涛",team:"第二交付",status:"used"},
+  {floor:"17F",seat:75,leader:"刘鑫涛",team:"第二交付",status:"used"},
+  {floor:"17F",seat:76,leader:"刘鑫涛",team:"第二交付",status:"used"},
+  {floor:"17F",seat:77,leader:"刘鑫涛",team:"第二交付",status:"used"},
+  {floor:"17F",seat:78,leader:"刘鑫涛",team:"第二交付",status:"used"},
+  {floor:"17F",seat:79,leader:"刘鑫涛",team:"第二交付",status:"used"},
+  {floor:"17F",seat:8,leader:"秦小曼",team:"第一交付",status:"used"},
+  {floor:"17F",seat:80,leader:"刘鑫涛",team:"第二交付",status:"used"},
+  {floor:"17F",seat:81,leader:"刘鑫涛",team:"第二交付",status:"used"},
+  {floor:"17F",seat:82,leader:"未分配",team:"未分配",status:"unused"},
+  {floor:"17F",seat:83,leader:"刘鑫涛",team:"第二交付",status:"used"},
+  {floor:"17F",seat:84,leader:"刘鑫涛",team:"第二交付",status:"used"},
+  {floor:"17F",seat:85,leader:"刘鑫涛",team:"第二交付",status:"used"},
+  {floor:"17F",seat:86,leader:"刘鑫涛",team:"第二交付",status:"used"},
+  {floor:"17F",seat:87,leader:"刘鑫涛",team:"第二交付",status:"used"},
+  {floor:"17F",seat:88,leader:"刘鑫涛",team:"第二交付",status:"used"},
+  {floor:"17F",seat:89,leader:"刘鑫涛",team:"第二交付",status:"used"},
+  {floor:"17F",seat:9,leader:"秦小曼",team:"第一交付",status:"used"},
+  {floor:"17F",seat:90,leader:"刘鑫涛",team:"第二交付",status:"used"},
+  {floor:"17F",seat:91,leader:"陈河冰",team:"第二交付",status:"used"},
+  {floor:"17F",seat:92,leader:"陈河冰",team:"第二交付",status:"used"},
+  {floor:"17F",seat:93,leader:"陈河冰",team:"第二交付",status:"used"},
+  {floor:"17F",seat:94,leader:"未分配",team:"未分配",status:"unused"},
+  {floor:"17F",seat:95,leader:"未分配",team:"未分配",status:"unused"},
+  {floor:"17F",seat:96,leader:"陈河冰",team:"第二交付",status:"used"},
+  {floor:"17F",seat:97,leader:"陈河冰",team:"第二交付",status:"used"},
+  {floor:"17F",seat:98,leader:"李健华",team:"第二交付",status:"used"},
+  {floor:"17F",seat:99,leader:"李健华",team:"第二交付",status:"used"},
+  {floor:"18F",seat:1,leader:"薛亚杰",team:"第二交付",status:"used"},
+  {floor:"18F",seat:10,leader:"薛亚杰",team:"第二交付",status:"used"},
+  {floor:"18F",seat:100,leader:"陈世权",team:"第二交付",status:"used"},
+  {floor:"18F",seat:101,leader:"陈世权",team:"第二交付",status:"used"},
+  {floor:"18F",seat:102,leader:"葛云飞",team:"第二交付",status:"used"},
+  {floor:"18F",seat:103,leader:"陈世权",team:"第二交付",status:"used"},
+  {floor:"18F",seat:104,leader:"陈世权",team:"第二交付",status:"used"},
+  {floor:"18F",seat:105,leader:"陈世权",team:"第二交付",status:"used"},
+  {floor:"18F",seat:106,leader:"陈世权",team:"第二交付",status:"used"},
+  {floor:"18F",seat:107,leader:"陈世权",team:"第二交付",status:"used"},
+  {floor:"18F",seat:108,leader:"未分配",team:"未分配",status:"unused"},
+  {floor:"18F",seat:109,leader:"未分配",team:"未分配",status:"unused"},
+  {floor:"18F",seat:11,leader:"薛亚杰",team:"第二交付",status:"used"},
+  {floor:"18F",seat:110,leader:"陈世权",team:"第二交付",status:"used"},
+  {floor:"18F",seat:111,leader:"陈世权",team:"第二交付",status:"used"},
+  {floor:"18F",seat:112,leader:"陈世权",team:"第二交付",status:"used"},
+  {floor:"18F",seat:113,leader:"未分配",team:"未分配",status:"unused"},
+  {floor:"18F",seat:114,leader:"未分配",team:"未分配",status:"unused"},
+  {floor:"18F",seat:115,leader:"陈世权",team:"第二交付",status:"used"},
+  {floor:"18F",seat:116,leader:"陈世权",team:"第二交付",status:"used"},
+  {floor:"18F",seat:117,leader:"陈世权",team:"第二交付",status:"used"},
+  {floor:"18F",seat:118,leader:"陈世权",team:"第二交付",status:"used"},
+  {floor:"18F",seat:119,leader:"陈世权",team:"第二交付",status:"used"},
+  {floor:"18F",seat:12,leader:"薛亚杰",team:"第二交付",status:"used"},
+  {floor:"18F",seat:120,leader:"陈世权",team:"第二交付",status:"used"},
+  {floor:"18F",seat:121,leader:"陈世权",team:"第二交付",status:"used"},
+  {floor:"18F",seat:122,leader:"陈世权",team:"第二交付",status:"used"},
+  {floor:"18F",seat:123,leader:"陈世权",team:"第二交付",status:"used"},
+  {floor:"18F",seat:124,leader:"陈世权",team:"第二交付",status:"used"},
+  {floor:"18F",seat:125,leader:"陈世权",team:"第二交付",status:"used"},
+  {floor:"18F",seat:126,leader:"未分配",team:"未分配",status:"unused"},
+  {floor:"18F",seat:127,leader:"行政+8000",team:"行政+8000",status:"used"},
+  {floor:"18F",seat:128,leader:"行政+8000",team:"行政+8000",status:"used"},
+  {floor:"18F",seat:129,leader:"行政+8000",team:"行政+8000",status:"used"},
+  {floor:"18F",seat:13,leader:"薛亚杰",team:"第二交付",status:"used"},
+  {floor:"18F",seat:130,leader:"行政+8000",team:"行政+8000",status:"used"},
+  {floor:"18F",seat:131,leader:"未分配",team:"未分配",status:"unused"},
+  {floor:"18F",seat:132,leader:"未分配",team:"未分配",status:"unused"},
+  {floor:"18F",seat:133,leader:"未分配",team:"未分配",status:"unused"},
+  {floor:"18F",seat:134,leader:"未分配",team:"未分配",status:"unused"},
+  {floor:"18F",seat:135,leader:"东旭",team:"第二交付",status:"used"},
+  {floor:"18F",seat:136,leader:"东旭",team:"第二交付",status:"used"},
+  {floor:"18F",seat:137,leader:"东旭",team:"第二交付",status:"used"},
+  {floor:"18F",seat:138,leader:"王伟伟",team:"第二交付",status:"used"},
+  {floor:"18F",seat:139,leader:"王伟伟",team:"第二交付",status:"used"},
+  {floor:"18F",seat:14,leader:"薛亚杰",team:"第二交付",status:"used"},
+  {floor:"18F",seat:140,leader:"王伟伟",team:"第二交付",status:"used"},
+  {floor:"18F",seat:141,leader:"王伟伟",team:"第二交付",status:"used"},
+  {floor:"18F",seat:142,leader:"王伟伟",team:"第二交付",status:"used"},
+  {floor:"18F",seat:143,leader:"王伟伟",team:"第二交付",status:"used"},
+  {floor:"18F",seat:144,leader:"东旭",team:"第二交付",status:"used"},
+  {floor:"18F",seat:145,leader:"东旭",team:"第二交付",status:"used"},
+  {floor:"18F",seat:146,leader:"东旭",team:"第二交付",status:"used"},
+  {floor:"18F",seat:147,leader:"王伟伟",team:"第二交付",status:"used"},
+  {floor:"18F",seat:148,leader:"王伟伟",team:"第二交付",status:"used"},
+  {floor:"18F",seat:149,leader:"王伟伟",team:"第二交付",status:"used"},
+  {floor:"18F",seat:15,leader:"薛亚杰",team:"第二交付",status:"used"},
+  {floor:"18F",seat:150,leader:"薛亚杰",team:"第二交付",status:"used"},
+  {floor:"18F",seat:151,leader:"薛亚杰",team:"第二交付",status:"used"},
+  {floor:"18F",seat:152,leader:"薛亚杰",team:"第二交付",status:"used"},
+  {floor:"18F",seat:153,leader:"未分配",team:"未分配",status:"unused"},
+  {floor:"18F",seat:154,leader:"未分配",team:"未分配",status:"unused"},
+  {floor:"18F",seat:155,leader:"未分配",team:"未分配",status:"unused"},
+  {floor:"18F",seat:156,leader:"未分配",team:"未分配",status:"unused"},
+  {floor:"18F",seat:157,leader:"未分配",team:"未分配",status:"unused"},
+  {floor:"18F",seat:158,leader:"未分配",team:"未分配",status:"unused"},
+  {floor:"18F",seat:159,leader:"薛亚杰",team:"第二交付",status:"used"},
+  {floor:"18F",seat:16,leader:"薛亚杰",team:"第二交付",status:"used"},
+  {floor:"18F",seat:160,leader:"薛亚杰",team:"第二交付",status:"used"},
+  {floor:"18F",seat:161,leader:"未分配",team:"未分配",status:"unused"},
+  {floor:"18F",seat:162,leader:"未分配",team:"未分配",status:"unused"},
+  {floor:"18F",seat:163,leader:"未分配",team:"未分配",status:"unused"},
+  {floor:"18F",seat:164,leader:"未分配",team:"未分配",status:"unused"},
+  {floor:"18F",seat:165,leader:"hr",team:"HR",status:"used"},
+  {floor:"18F",seat:166,leader:"hr",team:"HR",status:"used"},
+  {floor:"18F",seat:167,leader:"hr",team:"HR",status:"used"},
+  {floor:"18F",seat:168,leader:"hr",team:"HR",status:"used"},
+  {floor:"18F",seat:169,leader:"hr",team:"HR",status:"used"},
+  {floor:"18F",seat:17,leader:"薛亚杰",team:"第二交付",status:"used"},
+  {floor:"18F",seat:170,leader:"hr",team:"HR",status:"used"},
+  {floor:"18F",seat:171,leader:"薛亚杰",team:"第二交付",status:"used"},
+  {floor:"18F",seat:172,leader:"薛亚杰",team:"第二交付",status:"used"},
+  {floor:"18F",seat:173,leader:"未分配",team:"未分配",status:"unused"},
+  {floor:"18F",seat:174,leader:"未分配",team:"未分配",status:"unused"},
+  {floor:"18F",seat:175,leader:"未分配",team:"未分配",status:"unused"},
+  {floor:"18F",seat:176,leader:"未分配",team:"未分配",status:"unused"},
+  {floor:"18F",seat:177,leader:"未分配",team:"未分配",status:"unused"},
+  {floor:"18F",seat:178,leader:"王少桐",team:"第二交付",status:"used"},
+  {floor:"18F",seat:179,leader:"王少桐",team:"第二交付",status:"used"},
+  {floor:"18F",seat:18,leader:"薛亚杰",team:"第二交付",status:"used"},
+  {floor:"18F",seat:180,leader:"王少桐",team:"第二交付",status:"used"},
+  {floor:"18F",seat:181,leader:"王少桐",team:"第二交付",status:"used"},
+  {floor:"18F",seat:182,leader:"王少桐",team:"第二交付",status:"used"},
+  {floor:"18F",seat:183,leader:"王少桐",team:"第二交付",status:"used"},
+  {floor:"18F",seat:184,leader:"王少桐",team:"第二交付",status:"used"},
+  {floor:"18F",seat:185,leader:"王少桐",team:"第二交付",status:"used"},
+  {floor:"18F",seat:186,leader:"王少桐",team:"第二交付",status:"used"},
+  {floor:"18F",seat:187,leader:"王少桐",team:"第二交付",status:"used"},
+  {floor:"18F",seat:188,leader:"王少桐",team:"第二交付",status:"used"},
+  {floor:"18F",seat:189,leader:"王少桐",team:"第二交付",status:"used"},
+  {floor:"18F",seat:19,leader:"薛亚杰",team:"第二交付",status:"used"},
+  {floor:"18F",seat:190,leader:"王少桐",team:"第二交付",status:"used"},
+  {floor:"18F",seat:191,leader:"王少桐",team:"第二交付",status:"used"},
+  {floor:"18F",seat:192,leader:"王少桐",team:"第二交付",status:"used"},
+  {floor:"18F",seat:193,leader:"王少桐",team:"第二交付",status:"used"},
+  {floor:"18F",seat:194,leader:"王少桐",team:"第二交付",status:"used"},
+  {floor:"18F",seat:195,leader:"王少桐",team:"第二交付",status:"used"},
+  {floor:"18F",seat:196,leader:"王少桐",team:"第二交付",status:"used"},
+  {floor:"18F",seat:197,leader:"王少桐",team:"第二交付",status:"used"},
+  {floor:"18F",seat:198,leader:"王少桐",team:"第二交付",status:"used"},
+  {floor:"18F",seat:199,leader:"王少桐",team:"第二交付",status:"used"},
+  {floor:"18F",seat:2,leader:"薛亚杰",team:"第二交付",status:"used"},
+  {floor:"18F",seat:20,leader:"薛亚杰",team:"第二交付",status:"used"},
+  {floor:"18F",seat:200,leader:"王少桐",team:"第二交付",status:"used"},
+  {floor:"18F",seat:201,leader:"王少桐",team:"第二交付",status:"used"},
+  {floor:"18F",seat:202,leader:"王少桐",team:"第二交付",status:"used"},
+  {floor:"18F",seat:203,leader:"王少桐",team:"第二交付",status:"used"},
+  {floor:"18F",seat:204,leader:"王少桐",team:"第二交付",status:"used"},
+  {floor:"18F",seat:205,leader:"王少桐",team:"第二交付",status:"used"},
+  {floor:"18F",seat:206,leader:"王少桐",team:"第二交付",status:"used"},
+  {floor:"18F",seat:207,leader:"王少桐",team:"第二交付",status:"used"},
+  {floor:"18F",seat:208,leader:"王少桐",team:"第二交付",status:"used"},
+  {floor:"18F",seat:209,leader:"王少桐",team:"第二交付",status:"used"},
+  {floor:"18F",seat:21,leader:"薛亚杰",team:"第二交付",status:"used"},
+  {floor:"18F",seat:210,leader:"王少桐",team:"第二交付",status:"used"},
+  {floor:"18F",seat:211,leader:"王少桐",team:"第二交付",status:"used"},
+  {floor:"18F",seat:212,leader:"王少桐",team:"第二交付",status:"used"},
+  {floor:"18F",seat:213,leader:"王少桐",team:"第二交付",status:"used"},
+  {floor:"18F",seat:214,leader:"王少桐",team:"第二交付",status:"used"},
+  {floor:"18F",seat:215,leader:"王少桐",team:"第二交付",status:"used"},
+  {floor:"18F",seat:216,leader:"王少桐",team:"第二交付",status:"used"},
+  {floor:"18F",seat:217,leader:"王少桐",team:"第二交付",status:"used"},
+  {floor:"18F",seat:218,leader:"未分配",team:"未分配",status:"unused"},
+  {floor:"18F",seat:219,leader:"刘莎",team:"第二交付",status:"used"},
+  {floor:"18F",seat:22,leader:"薛亚杰",team:"第二交付",status:"used"},
+  {floor:"18F",seat:220,leader:"刘莎",team:"第二交付",status:"used"},
+  {floor:"18F",seat:221,leader:"刘莎",team:"第二交付",status:"used"},
+  {floor:"18F",seat:222,leader:"刘莎",team:"第二交付",status:"used"},
+  {floor:"18F",seat:223,leader:"刘莎",team:"第二交付",status:"used"},
+  {floor:"18F",seat:224,leader:"刘莎",team:"第二交付",status:"used"},
+  {floor:"18F",seat:225,leader:"刘莎",team:"第二交付",status:"used"},
+  {floor:"18F",seat:226,leader:"王珍",team:"第二交付",status:"used"},
+  {floor:"18F",seat:227,leader:"王珍",team:"第二交付",status:"used"},
+  {floor:"18F",seat:228,leader:"王珍",team:"第二交付",status:"used"},
+  {floor:"18F",seat:229,leader:"王珍",team:"第二交付",status:"used"},
+  {floor:"18F",seat:23,leader:"薛亚杰",team:"第二交付",status:"used"},
+  {floor:"18F",seat:230,leader:"王珍",team:"第二交付",status:"used"},
+  {floor:"18F",seat:231,leader:"王珍",team:"第二交付",status:"used"},
+  {floor:"18F",seat:232,leader:"王珍",team:"第二交付",status:"used"},
+  {floor:"18F",seat:233,leader:"王珍",team:"第二交付",status:"used"},
+  {floor:"18F",seat:234,leader:"王少桐",team:"第二交付",status:"used"},
+  {floor:"18F",seat:235,leader:"王少桐",team:"第二交付",status:"used"},
+  {floor:"18F",seat:236,leader:"未分配",team:"未分配",status:"unused"},
+  {floor:"18F",seat:237,leader:"王珍",team:"第二交付",status:"used"},
+  {floor:"18F",seat:238,leader:"未分配",team:"未分配",status:"unused"},
+  {floor:"18F",seat:239,leader:"王少桐",team:"第二交付",status:"used"},
+  {floor:"18F",seat:24,leader:"薛亚杰",team:"第二交付",status:"used"},
+  {floor:"18F",seat:240,leader:"王少桐",team:"第二交付",status:"used"},
+  {floor:"18F",seat:241,leader:"王少桐",team:"第二交付",status:"used"},
+  {floor:"18F",seat:242,leader:"王少桐",team:"第二交付",status:"used"},
+  {floor:"18F",seat:243,leader:"王少桐",team:"第二交付",status:"used"},
+  {floor:"18F",seat:244,leader:"王少桐",team:"第二交付",status:"used"},
+  {floor:"18F",seat:245,leader:"王少桐",team:"第二交付",status:"used"},
+  {floor:"18F",seat:246,leader:"宋晓茹",team:"第二交付",status:"used"},
+  {floor:"18F",seat:247,leader:"宋晓茹",team:"第二交付",status:"used"},
+  {floor:"18F",seat:248,leader:"宋晓茹",team:"第二交付",status:"used"},
+  {floor:"18F",seat:249,leader:"宋晓茹",team:"第二交付",status:"used"},
+  {floor:"18F",seat:25,leader:"薛亚杰",team:"第二交付",status:"used"},
+  {floor:"18F",seat:250,leader:"宋晓茹",team:"第二交付",status:"used"},
+  {floor:"18F",seat:251,leader:"宋晓茹",team:"第二交付",status:"used"},
+  {floor:"18F",seat:252,leader:"未分配",team:"未分配",status:"unused"},
+  {floor:"18F",seat:253,leader:"宋晓茹",team:"第二交付",status:"used"},
+  {floor:"18F",seat:254,leader:"侯旺旺",team:"第一交付",status:"used"},
+  {floor:"18F",seat:255,leader:"侯旺旺",team:"第一交付",status:"used"},
+  {floor:"18F",seat:256,leader:"侯旺旺",team:"第一交付",status:"used"},
+  {floor:"18F",seat:257,leader:"侯旺旺",team:"第一交付",status:"used"},
+  {floor:"18F",seat:258,leader:"闫晓静",team:"第一交付",status:"used"},
+  {floor:"18F",seat:259,leader:"闫晓静",team:"第一交付",status:"used"},
+  {floor:"18F",seat:26,leader:"薛亚杰",team:"第二交付",status:"used"},
+  {floor:"18F",seat:260,leader:"闫晓静",team:"第一交付",status:"used"},
+  {floor:"18F",seat:261,leader:"闫晓静",team:"第一交付",status:"used"},
+  {floor:"18F",seat:262,leader:"闫晓静",team:"第一交付",status:"used"},
+  {floor:"18F",seat:263,leader:"闫晓静",team:"第一交付",status:"used"},
+  {floor:"18F",seat:264,leader:"闫晓静",team:"第一交付",status:"used"},
+  {floor:"18F",seat:265,leader:"闫晓静",team:"第一交付",status:"used"},
+  {floor:"18F",seat:266,leader:"闫晓静",team:"第一交付",status:"used"},
+  {floor:"18F",seat:267,leader:"闫晓静",team:"第一交付",status:"used"},
+  {floor:"18F",seat:268,leader:"闫晓静",team:"第一交付",status:"used"},
+  {floor:"18F",seat:269,leader:"闫晓静",team:"第一交付",status:"used"},
+  {floor:"18F",seat:27,leader:"薛亚杰",team:"第二交付",status:"used"},
+  {floor:"18F",seat:270,leader:"闫晓静",team:"第一交付",status:"used"},
+  {floor:"18F",seat:271,leader:"闫晓静",team:"第一交付",status:"used"},
+  {floor:"18F",seat:272,leader:"闫晓静",team:"第一交付",status:"used"},
+  {floor:"18F",seat:273,leader:"闫晓静",team:"第一交付",status:"used"},
+  {floor:"18F",seat:274,leader:"闫晓静",team:"第一交付",status:"used"},
+  {floor:"18F",seat:275,leader:"闫晓静",team:"第一交付",status:"used"},
+  {floor:"18F",seat:276,leader:"闫晓静",team:"第一交付",status:"used"},
+  {floor:"18F",seat:277,leader:"闫晓静",team:"第一交付",status:"used"},
+  {floor:"18F",seat:278,leader:"闫晓静",team:"第一交付",status:"used"},
+  {floor:"18F",seat:279,leader:"闫晓静",team:"第一交付",status:"used"},
+  {floor:"18F",seat:28,leader:"薛亚杰",team:"第二交付",status:"used"},
+  {floor:"18F",seat:280,leader:"闫晓静",team:"第一交付",status:"used"},
+  {floor:"18F",seat:281,leader:"闫晓静",team:"第一交付",status:"used"},
+  {floor:"18F",seat:282,leader:"闫晓静",team:"第一交付",status:"used"},
+  {floor:"18F",seat:283,leader:"闫晓静",team:"第一交付",status:"used"},
+  {floor:"18F",seat:284,leader:"闫晓静",team:"第一交付",status:"used"},
+  {floor:"18F",seat:285,leader:"闫晓静",team:"第一交付",status:"used"},
+  {floor:"18F",seat:286,leader:"闫晓静",team:"第一交付",status:"used"},
+  {floor:"18F",seat:287,leader:"闫晓静",team:"第一交付",status:"used"},
+  {floor:"18F",seat:288,leader:"闫晓静",team:"第一交付",status:"used"},
+  {floor:"18F",seat:289,leader:"闫晓静",team:"第一交付",status:"used"},
+  {floor:"18F",seat:29,leader:"薛亚杰",team:"第二交付",status:"used"},
+  {floor:"18F",seat:290,leader:"闫晓静",team:"第一交付",status:"used"},
+  {floor:"18F",seat:291,leader:"闫晓静",team:"第一交付",status:"used"},
+  {floor:"18F",seat:292,leader:"闫晓静",team:"第一交付",status:"used"},
+  {floor:"18F",seat:293,leader:"闫晓静",team:"第一交付",status:"used"},
+  {floor:"18F",seat:294,leader:"闫晓静",team:"第一交付",status:"used"},
+  {floor:"18F",seat:295,leader:"闫晓静",team:"第一交付",status:"used"},
+  {floor:"18F",seat:296,leader:"闫晓静",team:"第一交付",status:"used"},
+  {floor:"18F",seat:297,leader:"闫晓静",team:"第一交付",status:"used"},
+  {floor:"18F",seat:298,leader:"闫晓静",team:"第一交付",status:"used"},
+  {floor:"18F",seat:299,leader:"未分配",team:"未分配",status:"unused"},
+  {floor:"18F",seat:3,leader:"薛亚杰",team:"第二交付",status:"used"},
+  {floor:"18F",seat:30,leader:"薛亚杰",team:"第二交付",status:"used"},
+  {floor:"18F",seat:300,leader:"闫晓静",team:"第一交付",status:"used"},
+  {floor:"18F",seat:301,leader:"闫晓静",team:"第一交付",status:"used"},
+  {floor:"18F",seat:302,leader:"闫晓静",team:"第一交付",status:"used"},
+  {floor:"18F",seat:303,leader:"闫晓静",team:"第一交付",status:"used"},
+  {floor:"18F",seat:304,leader:"闫晓静",team:"第一交付",status:"used"},
+  {floor:"18F",seat:305,leader:"闫晓静",team:"第一交付",status:"used"},
+  {floor:"18F",seat:306,leader:"闫晓静",team:"第一交付",status:"used"},
+  {floor:"18F",seat:307,leader:"闫晓静",team:"第一交付",status:"used"},
+  {floor:"18F",seat:308,leader:"闫晓静",team:"第一交付",status:"used"},
+  {floor:"18F",seat:309,leader:"闫晓静",team:"第一交付",status:"used"},
+  {floor:"18F",seat:31,leader:"薛亚杰",team:"第二交付",status:"used"},
+  {floor:"18F",seat:310,leader:"闫晓静",team:"第一交付",status:"used"},
+  {floor:"18F",seat:311,leader:"闫晓静",team:"第一交付",status:"used"},
+  {floor:"18F",seat:312,leader:"闫晓静",team:"第一交付",status:"used"},
+  {floor:"18F",seat:313,leader:"闫晓静",team:"第一交付",status:"used"},
+  {floor:"18F",seat:314,leader:"闫晓静",team:"第一交付",status:"used"},
+  {floor:"18F",seat:315,leader:"闫晓静",team:"第一交付",status:"used"},
+  {floor:"18F",seat:316,leader:"闫晓静",team:"第一交付",status:"used"},
+  {floor:"18F",seat:317,leader:"闫晓静",team:"第一交付",status:"used"},
+  {floor:"18F",seat:318,leader:"闫晓静",team:"第一交付",status:"used"},
+  {floor:"18F",seat:319,leader:"闫晓静",team:"第一交付",status:"used"},
+  {floor:"18F",seat:32,leader:"薛亚杰",team:"第二交付",status:"used"},
+  {floor:"18F",seat:320,leader:"闫晓静",team:"第一交付",status:"used"},
+  {floor:"18F",seat:321,leader:"闫晓静",team:"第一交付",status:"used"},
+  {floor:"18F",seat:33,leader:"薛亚杰",team:"第二交付",status:"used"},
+  {floor:"18F",seat:34,leader:"薛亚杰",team:"第二交付",status:"used"},
+  {floor:"18F",seat:35,leader:"薛亚杰",team:"第二交付",status:"used"},
+  {floor:"18F",seat:36,leader:"薛亚杰",team:"第二交付",status:"used"},
+  {floor:"18F",seat:37,leader:"薛亚杰",team:"第二交付",status:"used"},
+  {floor:"18F",seat:38,leader:"薛亚杰",team:"第二交付",status:"used"},
+  {floor:"18F",seat:39,leader:"薛亚杰",team:"第二交付",status:"used"},
+  {floor:"18F",seat:4,leader:"薛亚杰",team:"第二交付",status:"used"},
+  {floor:"18F",seat:40,leader:"薛亚杰",team:"第二交付",status:"used"},
+  {floor:"18F",seat:41,leader:"薛亚杰",team:"第二交付",status:"used"},
+  {floor:"18F",seat:42,leader:"薛亚杰",team:"第二交付",status:"used"},
+  {floor:"18F",seat:43,leader:"薛亚杰",team:"第二交付",status:"used"},
+  {floor:"18F",seat:44,leader:"薛亚杰",team:"第二交付",status:"used"},
+  {floor:"18F",seat:45,leader:"薛亚杰",team:"第二交付",status:"used"},
+  {floor:"18F",seat:46,leader:"薛亚杰",team:"第二交付",status:"used"},
+  {floor:"18F",seat:47,leader:"薛亚杰",team:"第二交付",status:"used"},
+  {floor:"18F",seat:48,leader:"薛亚杰",team:"第二交付",status:"used"},
+  {floor:"18F",seat:49,leader:"未分配",team:"未分配",status:"unused"},
+  {floor:"18F",seat:5,leader:"薛亚杰",team:"第二交付",status:"used"},
+  {floor:"18F",seat:50,leader:"薛亚杰",team:"第二交付",status:"used"},
+  {floor:"18F",seat:51,leader:"薛亚杰",team:"第二交付",status:"used"},
+  {floor:"18F",seat:52,leader:"薛亚杰",team:"第二交付",status:"used"},
+  {floor:"18F",seat:53,leader:"薛亚杰",team:"第二交付",status:"used"},
+  {floor:"18F",seat:54,leader:"薛亚杰",team:"第二交付",status:"used"},
+  {floor:"18F",seat:55,leader:"薛亚杰",team:"第二交付",status:"used"},
+  {floor:"18F",seat:56,leader:"薛亚杰",team:"第二交付",status:"used"},
+  {floor:"18F",seat:57,leader:"薛亚杰",team:"第二交付",status:"used"},
+  {floor:"18F",seat:58,leader:"薛亚杰",team:"第二交付",status:"used"},
+  {floor:"18F",seat:59,leader:"薛亚杰",team:"第二交付",status:"used"},
+  {floor:"18F",seat:6,leader:"薛亚杰",team:"第二交付",status:"used"},
+  {floor:"18F",seat:60,leader:"薛亚杰",team:"第二交付",status:"used"},
+  {floor:"18F",seat:61,leader:"薛亚杰",team:"第二交付",status:"used"},
+  {floor:"18F",seat:62,leader:"薛亚杰",team:"第二交付",status:"used"},
+  {floor:"18F",seat:63,leader:"薛亚杰",team:"第二交付",status:"used"},
+  {floor:"18F",seat:64,leader:"薛亚杰",team:"第二交付",status:"used"},
+  {floor:"18F",seat:65,leader:"薛亚杰",team:"第二交付",status:"used"},
+  {floor:"18F",seat:66,leader:"薛亚杰",team:"第二交付",status:"used"},
+  {floor:"18F",seat:67,leader:"薛亚杰",team:"第二交付",status:"used"},
+  {floor:"18F",seat:68,leader:"薛亚杰",team:"第二交付",status:"used"},
+  {floor:"18F",seat:69,leader:"未分配",team:"未分配",status:"unused"},
+  {floor:"18F",seat:7,leader:"薛亚杰",team:"第二交付",status:"used"},
+  {floor:"18F",seat:70,leader:"薛亚杰",team:"第二交付",status:"used"},
+  {floor:"18F",seat:71,leader:"薛亚杰",team:"第二交付",status:"used"},
+  {floor:"18F",seat:72,leader:"薛亚杰",team:"第二交付",status:"used"},
+  {floor:"18F",seat:73,leader:"薛亚杰",team:"第二交付",status:"used"},
+  {floor:"18F",seat:74,leader:"薛亚杰",team:"第二交付",status:"used"},
+  {floor:"18F",seat:75,leader:"薛亚杰",team:"第二交付",status:"used"},
+  {floor:"18F",seat:76,leader:"薛亚杰",team:"第二交付",status:"used"},
+  {floor:"18F",seat:77,leader:"未分配",team:"未分配",status:"unused"},
+  {floor:"18F",seat:78,leader:"未分配",team:"未分配",status:"unused"},
+  {floor:"18F",seat:79,leader:"薛亚杰",team:"第二交付",status:"used"},
+  {floor:"18F",seat:8,leader:"薛亚杰",team:"第二交付",status:"used"},
+  {floor:"18F",seat:80,leader:"薛亚杰",team:"第二交付",status:"used"},
+  {floor:"18F",seat:81,leader:"薛亚杰",team:"第二交付",status:"used"},
+  {floor:"18F",seat:82,leader:"薛亚杰",team:"第二交付",status:"used"},
+  {floor:"18F",seat:83,leader:"薛亚杰",team:"第二交付",status:"used"},
+  {floor:"18F",seat:84,leader:"薛亚杰",team:"第二交付",status:"used"},
+  {floor:"18F",seat:85,leader:"薛亚杰",team:"第二交付",status:"used"},
+  {floor:"18F",seat:86,leader:"薛亚杰",team:"第二交付",status:"used"},
+  {floor:"18F",seat:87,leader:"薛亚杰",team:"第二交付",status:"used"},
+  {floor:"18F",seat:88,leader:"葛云飞",team:"第二交付",status:"used"},
+  {floor:"18F",seat:89,leader:"葛云飞",team:"第二交付",status:"used"},
+  {floor:"18F",seat:9,leader:"薛亚杰",team:"第二交付",status:"used"},
+  {floor:"18F",seat:90,leader:"葛云飞",team:"第二交付",status:"used"},
+  {floor:"18F",seat:91,leader:"葛云飞",team:"第二交付",status:"used"},
+  {floor:"18F",seat:92,leader:"葛云飞",team:"第二交付",status:"used"},
+  {floor:"18F",seat:93,leader:"葛云飞",team:"第二交付",status:"used"},
+  {floor:"18F",seat:94,leader:"葛云飞",team:"第二交付",status:"used"},
+  {floor:"18F",seat:95,leader:"葛云飞",team:"第二交付",status:"used"},
+  {floor:"18F",seat:96,leader:"葛云飞",team:"第二交付",status:"used"},
+  {floor:"18F",seat:97,leader:"葛云飞",team:"第二交付",status:"used"},
+  {floor:"18F",seat:98,leader:"陈世权",team:"第二交付",status:"used"},
+  {floor:"18F",seat:99,leader:"陈世权",team:"第二交付",status:"used"}
+];
+
+// ===== STATE =====
+let editingRow = null;
+let currentPanel = 'dashboard';
+let modifiedData = {};
+let sharedState = { layouts: {}, modifiedData: {}, updatedAt: 0 };
+let sharedSyncAvailable = true;
+let sharedSyncTimer = null;
+let sseSource = null;
+let sharedSyncPushing = false;
+let sharedSyncPending = false;
+let sharedSyncLastStamp = 0;
+
+// ===== INIT =====
+function init() {
+  // Tab clicks
+  document.querySelectorAll('.tab').forEach(tab => {
+    tab.addEventListener('click', () => {
+      document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+      tab.classList.add('active');
+      currentPanel = tab.dataset.panel;
+      document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
+      document.getElementById('panel-' + currentPanel).classList.add('active');
+      applyFilters();
+    });
+  });
+  renderAll();
+  refreshSharedState(false, function(changed) {
+    if (changed) renderAll();
+  });
+  startSharedSync();
+}
+
+// ===== 共享数据同步 =====
+// 通过同源接口 /api/state 同步数据；如果接口不存在，自动退回本机浏览器缓存。
+function cloneObj(obj) {
+  return JSON.parse(JSON.stringify(obj || {}));
+}
+
+function getCurrentSharedPayload() {
+  return {
+    layouts: {
+      '17F': loadLayout('17F'),
+      '18F': loadLayout('18F')
+    },
+    modifiedData: cloneObj(modifiedData),
+    updatedAt: Date.now()
+  };
+}
+
+function refreshSharedState(silent, callback) {
+  if (!sharedSyncAvailable) {
+    if (callback) callback(false);
+    return;
+  }
+  fetch('/api/state?ts=' + Date.now(), { cache: 'no-store' })
+    .then(function(res) {
+      if (!res.ok) throw new Error('共享接口不可用');
+      return res.json();
+    })
+    .then(function(data) {
+      var stamp = data && data.updatedAt ? data.updatedAt : 0;
+      var changed = stamp && stamp !== sharedSyncLastStamp;
+      sharedState = {
+        layouts: data.layouts || {},
+        modifiedData: data.modifiedData || {},
+        updatedAt: stamp
+      };
+      sharedSyncLastStamp = stamp;
+      if (sharedState.modifiedData) {
+        modifiedData = cloneObj(sharedState.modifiedData);
+        localStorage.setItem('workspace_mods', JSON.stringify(modifiedData));
+      }
+      if (sharedState.layouts) {
+        if (sharedState.layouts['17F']) localStorage.setItem('fp_layout_17F', JSON.stringify(sharedState.layouts['17F']));
+        if (sharedState.layouts['18F']) localStorage.setItem('fp_layout_18F', JSON.stringify(sharedState.layouts['18F']));
+      }
+      if (silent && changed) renderAll();
+      if (callback) callback(changed);
+    })
+    .catch(function() {
+      sharedSyncAvailable = false;
+      if (!silent) console.warn('共享数据接口不可用，已使用本地缓存模式');
+      if (callback) callback(false);
+    });
+}
+
+function pushSharedState() {
+  if (!sharedSyncAvailable) return;
+  if (sharedSyncPushing) {
+    sharedSyncPending = true;
+    return;
+  }
+  sharedSyncPushing = true;
+  sharedSyncPending = false;
+  var payload = getCurrentSharedPayload();
+  fetch('/api/state', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload)
+  })
+    .then(function(res) {
+      if (!res.ok) throw new Error('保存共享数据失败');
+      return res.json();
+    })
+    .then(function(data) {
+      sharedState = {
+        layouts: data.layouts || payload.layouts,
+        modifiedData: data.modifiedData || payload.modifiedData,
+        updatedAt: data.updatedAt || payload.updatedAt
+      };
+      sharedSyncLastStamp = sharedState.updatedAt || Date.now();
+    })
+    .catch(function() {
+      sharedSyncAvailable = false;
+      console.warn('共享保存失败，已保留在本地缓存');
+    })
+    .finally(function() {
+      sharedSyncPushing = false;
+      if (sharedSyncPending && sharedSyncAvailable) pushSharedState();
+    });
+}
+
+function startSharedSync() {
+  // 断开旧连接
+  if (sseSource) { sseSource.close(); sseSource = null; }
+  if (sharedSyncTimer) { clearInterval(sharedSyncTimer); sharedSyncTimer = null; }
+  // 先尝试连接 SSE 实时推送
+  try {
+    sseSource = new EventSource('/api/events');
+    sseSource.onopen = function() {
+      sharedSyncAvailable = true;
+    };
+    sseSource.onmessage = function(e) {
+      // 收到推送事件 → 立即拉取最新数据
+      refreshSharedState(true, function(changed) {
+        if (changed) renderAll();
+      });
+    };
+    sseSource.onerror = function() {
+      // SSE 连接失败 → 降级为 5 秒轮询
+      sseSource.close();
+      sseSource = null;
+      sharedSyncAvailable = false;
+      // 5秒后重试一次 SSE
+      setTimeout(function() {
+        if (!sseSource) startSharedSync();
+      }, 5000);
+      // 同时启动轮询兜底
+      if (!sharedSyncTimer) {
+        sharedSyncTimer = setInterval(function() {
+          refreshSharedState(true, function(changed) {
+            if (changed) renderAll();
+          });
+        }, 5000);
+      }
+    };
+  } catch (err) {
+    sharedSyncAvailable = false;
+    if (!sharedSyncTimer) {
+      sharedSyncTimer = setInterval(function() {
+        refreshSharedState(true, function(changed) {
+          if (changed) renderAll();
+        });
+      }, 5000);
+    }
+  }
+}
+
+function saveWorkspaceMods() {
+  localStorage.setItem('workspace_mods', JSON.stringify(modifiedData));
+  if (sharedSyncAvailable) pushSharedState();
+}
+
+function getData() {
+  return WORKSPACES.map(w => modifiedData[w.floor + '-' + w.seat] || w);
+}
+
+function getFiltered() {
+  let data = getData();
+  const search = document.getElementById('searchInput').value.toLowerCase();
+  const floor = document.getElementById('floorFilter').value;
+  const status = document.getElementById('statusFilter').value;
+  
+  if (search) {
+    data = data.filter(d => 
+      String(d.seat).includes(search) ||
+      d.leader.includes(search) ||
+      d.team.includes(search) ||
+      d.floor.includes(search)
+    );
+  }
+  if (floor) data = data.filter(d => d.floor === floor);
+  if (status) data = data.filter(d => d.status === status);
+  return data;
+}
+
+function updateStats() {
+  const data = getData();
+  const f18 = data.filter(d => d.floor === '18F');
+  const f17 = data.filter(d => d.floor === '17F');
+  const used = data.filter(d => d.status === 'used').length;
+  const unused = data.filter(d => d.status === 'unused').length;
+  const f18u = f18.filter(d => d.status === 'used').length;
+  const f17u = f17.filter(d => d.status === 'used').length;
+  
+  document.getElementById('totalUsed').textContent = used;
+  document.getElementById('totalUnused').textContent = unused;
+  document.getElementById('totalRate').textContent = (used / data.length * 100).toFixed(1) + '%';
+  document.getElementById('f18Used').textContent = f18u;
+  document.getElementById('f17Used').textContent = f17u;
+}
+
+function resetFilters() {
+  document.getElementById('searchInput').value = '';
+  document.getElementById('floorFilter').value = '';
+  document.getElementById('statusFilter').value = '';
+  applyFilters();
+}
+
+function applyFilters() {
+  renderAll();
+}
+
+
+// ===== FLOOR PLAN GRID DATA =====
+const F18_GRID = [
+  ["230|王珍|#99CCCC","231|王珍|#99CCCC","321|闫晓静|#66B2FF","317|闫晓静|#66B2FF","232|王珍|#99CCCC","313|闫晓静|#66B2FF","306|闫晓静|#66B2FF","233|王珍|#99CCCC","305|闫晓静|#66B2FF","298|闫晓静|#66B2FF","0","297|闫晓静|#66B2FF","290|闫晓静|#66B2FF","0","289|闫晓静|#66B2FF","288|闫晓静|#66B2FF","0","283|闫晓静|#66B2FF","282|闫晓静|#66B2FF","0","0","277|闫晓静|#66B2FF","276|闫晓静|#66B2FF","0","271|闫晓静|#66B2FF","270|闫晓静|#66B2FF","0","265|闫晓静|#66B2FF","264|闫晓静|#66B2FF","0","259|闫晓静|#66B2FF","258|闫晓静|#66B2FF","0","253|宋晓茹|#CCCC99","252|未分配|#F0F0F0","0","247|宋晓茹|#CCCC99","246|宋晓茹|#CCCC99","0","241|王少桐|#66CC99","240|王少桐|#66CC99","194|王少桐|#66CC99","193|王少桐|#66CC99","186|王少桐|#66CC99","195|王少桐|#66CC99","185|王少桐|#66CC99","178|王少桐|#66CC99","196|王少桐|#66CC99","177|未分配|#F0F0F0","174|未分配|#F0F0F0","197|王少桐|#66CC99","209|王少桐|#66CC99","202|王少桐|#66CC99","210|王少桐|#66CC99","201|王少桐|#66CC99","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0"],
+  ["0","0","320|闫晓静|#66B2FF","316|闫晓静|#66B2FF","0","312|闫晓静|#66B2FF","307|闫晓静|#66B2FF","0","304|闫晓静|#66B2FF","299|未分配|#F0F0F0","0","296|闫晓静|#66B2FF","291|闫晓静|#66B2FF","0","287|闫晓静|#66B2FF","286|闫晓静|#66B2FF","0","281|闫晓静|#66B2FF","280|闫晓静|#66B2FF","0","0","275|闫晓静|#66B2FF","274|闫晓静|#66B2FF","0","269|闫晓静|#66B2FF","268|闫晓静|#66B2FF","0","263|闫晓静|#66B2FF","262|闫晓静|#66B2FF","0","257|侯旺旺|#FFB366","256|侯旺旺|#FFB366","0","251|宋晓茹|#CCCC99","250|宋晓茹|#CCCC99","0","245|王少桐|#66CC99","244|王少桐|#66CC99","0","239|王少桐|#66CC99","238|未分配|#F0F0F0","211|王少桐|#66CC99","192|王少桐|#66CC99","187|王少桐|#66CC99","216|王少桐|#66CC99","184|王少桐|#66CC99","179|王少桐|#66CC99","217|王少桐|#66CC99","176|未分配|#F0F0F0","175|未分配|#F0F0F0","218|未分配|#F0F0F0","208|王少桐|#66CC99","203|王少桐|#66CC99","219|刘莎|#FF99CC","200|王少桐|#66CC99","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0"],
+  ["0","0","319|闫晓静|#66B2FF","315|闫晓静|#66B2FF","0","311|闫晓静|#66B2FF","308|闫晓静|#66B2FF","0","303|闫晓静|#66B2FF","300|闫晓静|#66B2FF","0","295|闫晓静|#66B2FF","292|闫晓静|#66B2FF","0","285|闫晓静|#66B2FF","284|闫晓静|#66B2FF","0","279|闫晓静|#66B2FF","278|闫晓静|#66B2FF","0","0","273|闫晓静|#66B2FF","272|闫晓静|#66B2FF","0","267|闫晓静|#66B2FF","266|闫晓静|#66B2FF","0","261|闫晓静|#66B2FF","260|闫晓静|#66B2FF","0","255|侯旺旺|#FFB366","254|侯旺旺|#FFB366","0","249|宋晓茹|#CCCC99","248|宋晓茹|#CCCC99","0","243|王少桐|#66CC99","242|王少桐|#66CC99","0","237|王珍|#99CCCC","236|未分配|#F0F0F0","220|刘莎|#FF99CC","191|王少桐|#66CC99","188|王少桐|#66CC99","221|刘莎|#FF99CC","183|王少桐|#66CC99","180|王少桐|#66CC99","222|刘莎|#FF99CC","215|王少桐|#66CC99","212|王少桐|#66CC99","223|刘莎|#FF99CC","207|王少桐|#66CC99","204|王少桐|#66CC99","224|刘莎|#FF99CC","199|王少桐|#66CC99","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0"],
+  ["0","0","318|闫晓静|#66B2FF","314|闫晓静|#66B2FF","0","310|闫晓静|#66B2FF","309|闫晓静|#66B2FF","0","302|闫晓静|#66B2FF","301|闫晓静|#66B2FF","0","294|闫晓静|#66B2FF","293|闫晓静|#66B2FF","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","235|王少桐|#66CC99","234|王少桐|#66CC99","225|刘莎|#FF99CC","190|王少桐|#66CC99","189|王少桐|#66CC99","226|王珍|#99CCCC","182|王少桐|#66CC99","181|王少桐|#66CC99","227|王珍|#99CCCC","214|王少桐|#66CC99","213|王少桐|#66CC99","228|王珍|#99CCCC","206|王少桐|#66CC99","205|王少桐|#66CC99","229|王珍|#99CCCC","198|王少桐|#66CC99","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0"],
+  ["0","0","0","0","173|未分配|#F0F0F0","172|薛亚杰|#FF9999","0","0","163|未分配|#F0F0F0","162|未分配|#F0F0F0","0","0","153|未分配|#F0F0F0","152|薛亚杰|#FF9999","0","0","143|王伟伟|#CC99FF","142|王伟伟|#CC99FF","0","0","133|未分配|#F0F0F0","132|未分配|#F0F0F0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0"],
+  ["0","0","171|薛亚杰|#FF9999","170|hr|#C9B1FF","0","0","161|未分配|#F0F0F0","160|薛亚杰|#FF9999","0","0","151|薛亚杰|#FF9999","150|薛亚杰|#FF9999","0","0","141|王伟伟|#CC99FF","140|王伟伟|#CC99FF","0","0","131|未分配|#F0F0F0","130|行政+8000|#D4A574","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0"],
+  ["0","0","0","169|hr|#C9B1FF","168|hr|#C9B1FF","0","0","159|薛亚杰|#FF9999","158|未分配|#F0F0F0","0","0","149|王伟伟|#CC99FF","148|王伟伟|#CC99FF","0","0","139|王伟伟|#CC99FF","138|王伟伟|#CC99FF","0","0","129|行政+8000|#D4A574","128|行政+8000|#D4A574","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0"],
+  ["0","0","167|hr|#C9B1FF","166|hr|#C9B1FF","0","0","157|未分配|#F0F0F0","156|未分配|#F0F0F0","0","0","147|王伟伟|#CC99FF","146|东旭|#99FF99","0","0","137|东旭|#99FF99","136|东旭|#99FF99","0","0","127|行政+8000|#D4A574","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0"],
+  ["0","0","165|hr|#C9B1FF","164|未分配|#F0F0F0","0","0","155|未分配|#F0F0F0","154|未分配|#F0F0F0","0","0","145|东旭|#99FF99","144|东旭|#99FF99","0","0","135|东旭|#99FF99","134|未分配|#F0F0F0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0"],
+  ["0","0","0","0","0","0","126|未分配|#F0F0F0","125|陈世权|#FFCC99","0","116|陈世权|#FFCC99","115|陈世权|#FFCC99","0","0","106|陈世权|#FFCC99","105|陈世权|#FFCC99","0","0","96|葛云飞|#99CCFF","95|葛云飞|#99CCFF","0","0","86|薛亚杰|#FF9999","85|薛亚杰|#FF9999","0","0","76|薛亚杰|#FF9999","75|薛亚杰|#FF9999","0","0","66|薛亚杰|#FF9999","65|薛亚杰|#FF9999","0","0","0","63|薛亚杰|#FF9999","62|薛亚杰|#FF9999","0","0","53|薛亚杰|#FF9999","52|薛亚杰|#FF9999","0","0","43|薛亚杰|#FF9999","42|薛亚杰|#FF9999","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0"],
+  ["0","0","0","0","0","124|陈世权|#FFCC99","123|陈世权|#FFCC99","0","114|未分配|#F0F0F0","113|未分配|#F0F0F0","0","0","104|陈世权|#FFCC99","103|陈世权|#FFCC99","0","0","94|葛云飞|#99CCFF","93|葛云飞|#99CCFF","0","0","84|薛亚杰|#FF9999","83|薛亚杰|#FF9999","0","0","74|薛亚杰|#FF9999","73|薛亚杰|#FF9999","0","0","64|薛亚杰|#FF9999","63|薛亚杰|#FF9999","0","0","0","61|薛亚杰|#FF9999","60|薛亚杰|#FF9999","0","0","51|薛亚杰|#FF9999","50|薛亚杰|#FF9999","0","0","41|薛亚杰|#FF9999","40|薛亚杰|#FF9999","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0"],
+  ["0","0","0","0","0","122|陈世权|#FFCC99","121|陈世权|#FFCC99","0","112|陈世权|#FFCC99","111|陈世权|#FFCC99","0","0","102|葛云飞|#99CCFF","101|陈世权|#FFCC99","0","0","92|葛云飞|#99CCFF","91|葛云飞|#99CCFF","0","0","82|薛亚杰|#FF9999","81|薛亚杰|#FF9999","0","0","72|薛亚杰|#FF9999","71|薛亚杰|#FF9999","0","0","0","0","0","0","0","59|薛亚杰|#FF9999","58|薛亚杰|#FF9999","0","0","49|未分配|#F0F0F0","48|薛亚杰|#FF9999","0","0","39|薛亚杰|#FF9999","38|薛亚杰|#FF9999","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0"],
+  ["0","0","0","0","0","120|陈世权|#FFCC99","119|陈世权|#FFCC99","0","110|陈世权|#FFCC99","109|未分配|#F0F0F0","0","0","100|陈世权|#FFCC99","99|陈世权|#FFCC99","0","0","90|葛云飞|#99CCFF","89|葛云飞|#99CCFF","0","0","80|薛亚杰|#FF9999","79|薛亚杰|#FF9999","0","0","70|薛亚杰|#FF9999","69|未分配|#F0F0F0","0","0","0","0","0","0","0","57|薛亚杰|#FF9999","56|薛亚杰|#FF9999","0","0","47|薛亚杰|#FF9999","46|薛亚杰|#FF9999","0","0","37|薛亚杰|#FF9999","36|薛亚杰|#FF9999","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0"],
+  ["0","0","0","0","0","118|陈世权|#FFCC99","117|陈世权|#FFCC99","0","108|未分配|#F0F0F0","107|陈世权|#FFCC99","0","0","98|陈世权|#FFCC99","97|葛云飞|#99CCFF","0","0","88|葛云飞|#99CCFF","87|薛亚杰|#FF9999","0","0","78|未分配|#F0F0F0","77|未分配|#F0F0F0","0","0","68|薛亚杰|#FF9999","67|薛亚杰|#FF9999","0","0","0","0","0","0","0","55|薛亚杰|#FF9999","54|薛亚杰|#FF9999","0","0","45|薛亚杰|#FF9999","44|薛亚杰|#FF9999","0","0","35|薛亚杰|#FF9999","34|薛亚杰|#FF9999","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0"],
+  ["0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","33|薛亚杰|#FF9999","32|薛亚杰|#FF9999","0","0","21|薛亚杰|#FF9999","20|薛亚杰|#FF9999","0","0","9|薛亚杰|#FF9999","8|薛亚杰|#FF9999","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0"],
+  ["0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","31|薛亚杰|#FF9999","30|薛亚杰|#FF9999","0","0","19|薛亚杰|#FF9999","18|薛亚杰|#FF9999","0","0","7|薛亚杰|#FF9999","6|薛亚杰|#FF9999","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0"],
+  ["0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","29|薛亚杰|#FF9999","28|薛亚杰|#FF9999","0","0","17|薛亚杰|#FF9999","16|薛亚杰|#FF9999","0","0","5|薛亚杰|#FF9999","4|薛亚杰|#FF9999","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0"],
+  ["0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","27|薛亚杰|#FF9999","26|薛亚杰|#FF9999","0","0","15|薛亚杰|#FF9999","14|薛亚杰|#FF9999","0","0","3|薛亚杰|#FF9999","2|薛亚杰|#FF9999","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0"],
+  ["0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","25|薛亚杰|#FF9999","24|薛亚杰|#FF9999","0","0","13|薛亚杰|#FF9999","12|薛亚杰|#FF9999","0","0","1|薛亚杰|#FF9999","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0"],
+  ["0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","23|薛亚杰|#FF9999","22|薛亚杰|#FF9999","0","0","11|薛亚杰|#FF9999","10|薛亚杰|#FF9999","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0"],
+  ["0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0"],
+  ["0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0"],
+  ["0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0"],
+  ["0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0"],
+  ["0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0"],
+  ["0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0"],
+  ["0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0"],
+  ["0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0"],
+  ["0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0"],
+  ["0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0"]
+];
+
+const F17_GRID = [
+  ["142|佳森+宗展|#CCCCCC","143|佳森+宗展|#CCCCCC","144|佳森+宗展|#CCCCCC","145|佳森+宗展|#CCCCCC","146|佳森+宗展|#CCCCCC","147|佳森+宗展|#CCCCCC","148|佳森+宗展|#CCCCCC","149|佳森+宗展|#CCCCCC","150|佳森+宗展|#CCCCCC","151|佳森+宗展|#CCCCCC","152|佳森+宗展|#CCCCCC","153|佳森+宗展|#CCCCCC","154|佳森+宗展|#CCCCCC","155|佳森+宗展|#CCCCCC","156|佳森+宗展|#CCCCCC","157|佳森+宗展|#CCCCCC","158|佳森+宗展|#CCCCCC","159|佳森+宗展|#CCCCCC","160|佳森+宗展|#CCCCCC","161|佳森+宗展|#CCCCCC","162|未分配|#F0F0F0","163|未分配|#F0F0F0","164|未分配|#F0F0F0","165|未分配|#F0F0F0","166|未分配|#F0F0F0","167|未分配|#F0F0F0","168|未分配|#F0F0F0","169|未分配|#F0F0F0","170|未分配|#F0F0F0","171|未分配|#F0F0F0","172|未分配|#F0F0F0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0"],
+  ["141|佳森+宗展|#CCCCCC","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0"],
+  ["0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0"],
+  ["0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0"],
+  ["0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0"],
+  ["0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0"],
+  ["1|李健华|#99CCFF","2|李健华|#99CCFF","3|李健华|#99CCFF","4|李健华|#99CCFF","5|李健华|#99CCFF","6|李健华|#99CCFF","7|李健华|#99CCFF","8|李健华|#99CCFF","9|李健华|#99CCFF","10|李健华|#99CCFF","11|李健华|#99CCFF","12|李健华|#99CCFF","13|李健华|#99CCFF","14|李健华|#99CCFF","15|李健华|#99CCFF","16|李健华|#99CCFF","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0"],
+  ["17|李健华|#99CCFF","18|李健华|#99CCFF","19|李健华|#99CCFF","20|李健华|#99CCFF","21|秦小曼|#CC99FF","22|秦小曼|#CC99FF","23|秦小曼|#CC99FF","24|秦小曼|#CC99FF","25|秦小曼|#CC99FF","26|秦小曼|#CC99FF","27|秦小曼|#CC99FF","28|秦小曼|#CC99FF","29|秦小曼|#CC99FF","30|秦小曼|#CC99FF","31|秦小曼|#CC99FF","32|秦小曼|#CC99FF","33|秦小曼|#CC99FF","34|秦小曼|#CC99FF","35|秦小曼|#CC99FF","36|秦小曼|#CC99FF","37|秦小曼|#CC99FF","38|秦小曼|#CC99FF","39|秦小曼|#CC99FF","40|秦小曼|#CC99FF","41|李啸天|#99FF99","42|李啸天|#99FF99","43|李啸天|#99FF99","44|李啸天|#99FF99","45|李啸天|#99FF99","46|李啸天|#99FF99","47|李啸天|#99FF99","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0"],
+  ["48|李啸天|#99FF99","49|李啸天|#99FF99","50|李啸天|#99FF99","51|李啸天|#99FF99","52|李啸天|#99FF99","53|李啸天|#99FF99","54|李啸天|#99FF99","55|李啸天|#99FF99","56|李啸天|#99FF99","57|李啸天|#99FF99","58|李啸天|#99FF99","59|李啸天|#99FF99","60|李啸天|#99FF99","61|李啸天|#99FF99","62|李啸天|#99FF99","63|刘鑫涛|#FFCC99","64|刘鑫涛|#FFCC99","65|刘鑫涛|#FFCC99","66|刘鑫涛|#FFCC99","67|刘鑫涛|#FFCC99","68|刘鑫涛|#FFCC99","69|刘鑫涛|#FFCC99","70|刘鑫涛|#FFCC99","71|刘鑫涛|#FFCC99","72|刘鑫涛|#FFCC99","73|刘鑫涛|#FFCC99","74|刘鑫涛|#FFCC99","75|刘鑫涛|#FFCC99","76|刘鑫涛|#FFCC99","77|刘鑫涛|#FFCC99","78|刘鑫涛|#FFCC99","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0"],
+  ["79|刘鑫涛|#FFCC99","80|刘鑫涛|#FFCC99","81|刘鑫涛|#FFCC99","82|刘鑫涛|#FFCC99","83|陈河冰|#FFFF99","84|陈河冰|#FFFF99","85|陈河冰|#FFFF99","86|陈河冰|#FFFF99","87|陈河冰|#FFFF99","88|陈河冰|#FFFF99","89|陈河冰|#FFFF99","90|陈河冰|#FFFF99","91|陈河冰|#FFFF99","92|陈河冰|#FFFF99","93|陈河冰|#FFFF99","94|陈河冰|#FFFF99","95|陈河冰|#FFFF99","96|陈河冰|#FFFF99","97|陈河冰|#FFFF99","98|王思婷|#FF9999","99|王思婷|#FF9999","100|王思婷|#FF9999","101|王思婷|#FF9999","102|王思婷|#FF9999","103|王思婷|#FF9999","104|王思婷|#FF9999","105|王思婷|#FF9999","106|王思婷|#FF9999","107|王思婷|#FF9999","108|王思婷|#FF9999","109|王思婷|#FF9999","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0"],
+  ["110|王思婷|#FF9999","111|王思婷|#FF9999","112|王思婷|#FF9999","113|王思婷|#FF9999","114|王思婷|#FF9999","115|王思婷|#FF9999","116|王思婷|#FF9999","117|王思婷|#FF9999","118|王思婷|#FF9999","119|王思婷|#FF9999","120|王思婷|#FF9999","121|王思婷|#FF9999","122|王思婷|#FF9999","123|齐慧|#99FFFF","124|齐慧|#99FFFF","125|齐慧|#99FFFF","126|齐慧|#99FFFF","127|齐慧|#99FFFF","128|齐慧|#99FFFF","129|齐慧|#99FFFF","130|齐慧|#99FFFF","131|齐慧|#99FFFF","132|齐慧|#99FFFF","133|齐慧|#99FFFF","134|齐慧|#99FFFF","135|齐慧|#99FFFF","136|齐慧|#99FFFF","137|齐慧|#99FFFF","138|齐慧|#99FFFF","139|齐慧|#99FFFF","140|齐慧|#99FFFF","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0"],
+  ["0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0"],
+  ["0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0"],
+  ["0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0"],
+  ["0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0"],
+  ["0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0"],
+  ["0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0"],
+  ["0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0"],
+  ["0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0"],
+  ["0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0"],
+  ["0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0"],
+  ["0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0"],
+  ["0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0"],
+  ["0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0"],
+  ["0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0"],
+  ["0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0"],
+  ["0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0"],
+  ["0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0"]
+];
+
+const F18_LEADERS = [["薛亚杰", "#FF9999"], ["葛云飞", "#99CCFF"], ["陈世权", "#FFCC99"], ["行政+8000", "#D4A574"], ["东旭", "#99FF99"], ["王伟伟", "#CC99FF"], ["hr", "#C9B1FF"], ["王少桐", "#66CC99"], ["刘莎", "#FF99CC"], ["王珍", "#99CCCC"], ["宋晓茹", "#CCCC99"], ["侯旺旺", "#FFB366"], ["闫晓静", "#66B2FF"]];
+const F17_LEADERS = [["李健华", "#99CCFF"], ["秦小曼", "#CC99FF"], ["李啸天", "#99FF99"], ["刘鑫涛", "#FFCC99"], ["陈河冰", "#FFFF99"], ["王思婷", "#FF9999"], ["齐慧", "#99FFFF"], ["佳森+宗展", "#CCCCCC"]];
+
+// ===== RENDER =====
+function renderAll() {
+  renderDashboard();
+  renderFloor();
+  renderLeader();
+  renderTeam();
+  renderF18();
+  renderF17();
+  updateStats();
+}
+
+function buildTable(headers, rows, groups) {
+  let html = '<table><thead><tr>';
+  headers.forEach(h => html += `<th>${h}</th>`);
+  html += '</tr></thead><tbody>';
+  rows.forEach(row => html += row);
+  html += '</tbody></table>';
+  return html;
+}
+
+function renderDashboard() {
+  const data = getData();
+  
+  // === 1. 楼层×团队交叉分布 ===
+  const teams = {};
+  data.forEach(d => {
+    if (d.status !== 'used') return;
+    if (!teams[d.team]) teams[d.team] = {};
+    teams[d.team][d.floor] = (teams[d.team][d.floor] || 0) + 1;
+  });
+  const allTeams = Object.keys(teams).sort();
+  const floors = ['18F', '17F'];
+  
+  let crossHtml = '<table class="cross-table"><thead><tr><th>团队</th>';
+  floors.forEach(f => crossHtml += `<th>${f}</th>`);
+  crossHtml += '<th>合计</th></tr></thead><tbody>';
+  
+  const totals = {"18F": 0, "17F": 0};
+  allTeams.forEach(team => {
+    crossHtml += `<tr><td style="text-align:left;font-weight:500;">${team}</td>`;
+    let rowTotal = 0;
+    floors.forEach(f => {
+      const v = teams[team][f] || 0;
+      rowTotal += v;
+      totals[f] += v;
+      crossHtml += `<td>${v}</td>`;
+    });
+    crossHtml += `<td class="total-col">${rowTotal}</td></tr>`;
+  });
+  
+  // Total row
+  crossHtml += '<tr class="total-row"><td style="text-align:left;">合计</td>';
+  let grandTotal = 0;
+  floors.forEach(f => {
+    grandTotal += totals[f];
+    crossHtml += `<td>${totals[f]}</td>`;
+  });
+  crossHtml += `<td>${grandTotal}</td></tr></tbody></table>`;
+  
+  // === 2. 17F 组长明细 ===
+  const leaders17 = {};
+  data.forEach(d => {
+    if (d.floor === '17F' && d.status === 'used') {
+      leaders17[d.leader] = (leaders17[d.leader] || 0) + 1;
+    }
+  });
+  const total17 = Object.values(leaders17).reduce((a,b) => a+b, 0);
+  const sorted17 = Object.entries(leaders17).sort((a,b) => b[1]-a[1]);
+  const max17 = sorted17.length > 0 ? sorted17[0][1] : 1;
+  
+  let leader17Html = '<table class="leader-table"><thead><tr><th>组长</th><th>人数</th><th>占比</th><th>分布</th></tr></thead><tbody>';
+  sorted17.forEach(([name, count]) => {
+    const pct = (count / total17 * 100).toFixed(0);
+    const barW = (count / max17 * 100).toFixed(0);
+    leader17Html += `<tr>
+      <td><strong>${name}</strong></td>
+      <td>${count}</td>
+      <td class="pct">${pct}%</td>
+      <td class="bar-cell"><div class="bar-bg bar-17" style="width:${barW}%"></div></td>
+    </tr>`;
+  });
+  leader17Html += `<tr style="font-weight:700;background:#fff7e6;"><td>合计</td><td>${total17}</td><td>100%</td><td></td></tr></tbody></table>`;
+  
+  // === 3. 18F 组长明细 ===
+  const leaders18 = {};
+  data.forEach(d => {
+    if (d.floor === '18F' && d.status === 'used') {
+      leaders18[d.leader] = (leaders18[d.leader] || 0) + 1;
+    }
+  });
+  const total18 = Object.values(leaders18).reduce((a,b) => a+b, 0);
+  const sorted18 = Object.entries(leaders18).sort((a,b) => b[1]-a[1]);
+  const max18 = sorted18.length > 0 ? sorted18[0][1] : 1;
+  
+  let leader18Html = '<table class="leader-table"><thead><tr><th>组长</th><th>人数</th><th>占比</th><th>分布</th></tr></thead><tbody>';
+  sorted18.forEach(([name, count]) => {
+    const pct = (count / total18 * 100).toFixed(0);
+    const barW = (count / max18 * 100).toFixed(0);
+    leader18Html += `<tr>
+      <td><strong>${name}</strong></td>
+      <td>${count}</td>
+      <td class="pct">${pct}%</td>
+      <td class="bar-cell"><div class="bar-bg bar-18" style="width:${barW}%"></div></td>
+    </tr>`;
+  });
+  leader18Html += `<tr style="font-weight:700;background:#e6f7ff;"><td>合计</td><td>${total18}</td><td>100%</td><td></td></tr></tbody></table>`;
+  
+  // === Assemble ===
+  let html = `
+    <div class="dashboard-section">
+      <h3>📊 楼层 × 团队 交叉分布</h3>
+      ${crossHtml}
+    </div>
+    <div class="dashboard-flex">
+      <div class="dashboard-section">
+        <h3>🏢 17F 组长明细</h3>
+        ${leader17Html}
+      </div>
+      <div class="dashboard-section">
+        <h3>🏢 18F 组长明细</h3>
+        ${leader18Html}
+      </div>
+    </div>
+  `;
+  
+  document.getElementById('panel-dashboard').innerHTML = html;
+}
+
+function renderFloor() {
+  const data = getFiltered();
+  const floors = ['18F', '17F'];
+  let rows = [];
+  
+  floors.forEach(floor => {
+    const fd = data.filter(d => d.floor === floor);
+    if (fd.length === 0) return;
+    const used = fd.filter(d => d.status === 'used').length;
+    const total = fd.length;
+    const rate = (used / total * 100).toFixed(1);
+    const leaders = {};
+    fd.filter(d => d.status === 'used').forEach(d => {
+      const k = d.leader;
+      if (!leaders[k]) leaders[k] = 0;
+      leaders[k]++;
+    });
+    
+    rows.push(`<tr class="group-row"><td colspan="5">📊 ${floor} 层 · 已使用 ${used}/${total} · 使用率 ${rate}%</td></tr>`);
+    Object.entries(leaders).sort((a,b) => b[1]-a[1]).forEach(([leader, count]) => {
+      const team = fd.find(d => d.leader === leader)?.team || '';
+      rows.push(`<tr>
+        <td></td>
+        <td>${leader}</td>
+        <td>${team}</td>
+        <td><span class="badge badge-used">${count} 已用</span></td>
+        <td></td>
+      </tr>`);
+    });
+    rows.push(`<tr class="summary-row"><td></td><td>未分配</td><td></td><td><span class="badge badge-unused">${total - used} 空闲</span></td><td></td></tr>`);
+  });
+  
+  document.getElementById('panel-floor').innerHTML = buildTable(
+    ['', '组长', '团队', '已使用工位数', ''],
+    rows
+  );
+}
+
+function renderLeader() {
+  const data = getFiltered().filter(d => d.status === 'used');
+  const groups = {};
+  data.forEach(d => {
+    const k = d.leader;
+    if (!groups[k]) groups[k] = {leader: d.leader, team: d.team, floor: d.floor, items: []};
+    groups[k].items.push(d);
+  });
+  
+  let rows = [];
+  Object.entries(groups).sort((a,b) => b[1].items.length - a[1].items.length).forEach(([leader, g]) => {
+    const f18c = g.items.filter(d => d.floor === '18F').length;
+    const f17c = g.items.filter(d => d.floor === '17F').length;
+    rows.push(`<tr class="group-row"><td colspan="7">👤 ${leader} · ${g.team} · 总计 ${g.items.length} 人（18F: ${f18c} / 17F: ${f17c}）</td></tr>`);
+    g.items.sort((a,b) => a.floor === b.floor ? a.seat - b.seat : a.floor.localeCompare(b.floor)).forEach(d => {
+      rows.push(makeDataRow(d));
+    });
+  });
+  
+  document.getElementById('panel-leader').innerHTML = buildTable(
+    ['楼层', '工位号', '组长', '团队', '状态', '操作'],
+    rows
+  );
+}
+
+function renderTeam() {
+  const data = getFiltered();
+  const groups = {};
+  data.forEach(d => {
+    const k = d.team;
+    if (!groups[k]) groups[k] = {team: d.team, items: []};
+    groups[k].items.push(d);
+  });
+  
+  let rows = [];
+  Object.entries(groups).sort((a,b) => b[1].items.length - a[1].items.length).forEach(([team, g]) => {
+    const used = g.items.filter(d => d.status === 'used').length;
+    rows.push(`<tr class="group-row"><td colspan="7">🏢 ${team} · 总计 ${g.items.length} 工位 · 已用 ${used}</td></tr>`);
+    const leaders = {};
+    g.items.filter(d => d.status === 'used').forEach(d => {
+      if (!leaders[d.leader]) leaders[d.leader] = 0;
+      leaders[d.leader]++;
+    });
+    Object.entries(leaders).sort((a,b) => b[1]-a[1]).forEach(([leader, count]) => {
+      rows.push(`<tr>
+        <td></td><td></td><td>${leader}</td><td></td>
+        <td><span class="badge badge-used">${count} 人</span></td><td></td>
+      </tr>`);
+    });
+  });
+  
+  document.getElementById('panel-team').innerHTML = buildTable(
+    ['', '', '组长', '', '工位数', ''],
+    rows
+  );
+}
+
+
+function renderAllTable() {
+  const data = getFiltered();
+  let rows = data.map(d => makeDataRow(d));
+  document.getElementById('panel-all').innerHTML = buildTable(
+    ['楼层', '工位号', '组长', '团队', '状态', '操作'],
+    rows
+  );
+}
+
+function makeDataRow(d) {
+  const key = d.floor + '-' + d.seat;
+  const floorBadge = d.floor === '18F' ? 'badge-18' : 'badge-17';
+  const statusBadge = d.status === 'used' ? 'badge-used' : 'badge-unused';
+  const statusText = d.status === 'used' ? '已使用' : '未使用';
+  
+  if (editingRow === key) {
+    return `<tr id="row-${key}">
+      <td><span class="badge ${floorBadge}">${d.floor}</span></td>
+      <td>${d.seat}</td>
+      <td><input class="edit-input" id="edit-leader-${key}" value="${d.leader}"></td>
+      <td><input class="edit-input" id="edit-team-${key}" value="${d.team}"></td>
+      <td><select class="edit-select" id="edit-status-${key}">
+        <option value="used" ${d.status === 'used' ? 'selected' : ''}>已使用</option>
+        <option value="unused" ${d.status === 'unused' ? 'selected' : ''}>未使用</option>
+      </select></td>
+      <td class="edit-actions">
+        <button class="btn-sm save" onclick="saveEdit('${key}')">保存</button>
+        <button class="btn-sm cancel" onclick="cancelEdit()">取消</button>
+      </td>
+    </tr>`;
+  }
+  
+  return `<tr id="row-${key}" ondblclick="startEdit('${key}')">
+    <td><span class="badge ${floorBadge}">${d.floor}</span></td>
+    <td>${d.seat}</td>
+    <td>${d.leader}</td>
+    <td>${d.team}</td>
+    <td><span class="badge ${statusBadge}">${statusText}</span></td>
+    <td><button class="btn-sm" onclick="startEdit('${key}')">编辑</button></td>
+  </tr>`;
+}
+
+// ===== EDIT =====
+function startEdit(key) {
+  editingRow = key;
+  applyFilters();
+}
+
+function cancelEdit() {
+  editingRow = null;
+  applyFilters();
+}
+
+function saveEdit(key) {
+  const leader = document.getElementById('edit-leader-' + key).value;
+  const team = document.getElementById('edit-team-' + key).value;
+  const status = document.getElementById('edit-status-' + key).value;
+  modifiedData[key] = {
+    floor: key.startsWith('18F') ? '18F' : '17F',
+    seat: parseInt(key.split('-')[1]),
+    leader: leader,
+    team: team,
+    status: status
+  };
+  editingRow = null;
+  saveWorkspaceMods();
+  applyFilters();
+}
+
+// Load saved modifications
+try {
+  const saved = localStorage.getItem('workspace_mods');
+  if (saved) modifiedData = JSON.parse(saved);
+} catch(e) {}
+
+// ===== EXPORT =====
+function exportCSV() {
+  const data = getFiltered();
+  let csv = '\uFEFF楼层,工位号,组长,团队,状态\n';
+  data.forEach(d => {
+    csv += `${d.floor},${d.seat},${d.leader},${d.team},${d.status === 'used' ? '已使用' : '未使用'}\n`;
+  });
+  const blob = new Blob([csv], {type: 'text/csv;charset=utf-8'});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = '工位盘点_' + new Date().toISOString().slice(0,10) + '.csv';
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+// ===== SORT =====
+let sortCol = null, sortDir = 1;
+
+document.addEventListener('click', function(e) {
+  if (e.target.tagName === 'TH' && e.target.textContent) {
+    // sort logic can be expanded
+  }
+});
+
+
+// ===== FLOOR PLAN RENDERING =====
+// ===== LAYOUT PERSISTENCE =====
+function loadLayout(floorName) {
+  if (sharedState.layouts && sharedState.layouts[floorName]) {
+    return cloneObj(sharedState.layouts[floorName]);
+  }
+  try {
+    return JSON.parse(localStorage.getItem('fp_layout_' + floorName)) || {};
+  } catch(e) { return {}; }
+}
+
+function saveLayout(floorName, overrides) {
+  localStorage.setItem('fp_layout_' + floorName, JSON.stringify(overrides));
+  sharedState.layouts = sharedState.layouts || {};
+  sharedState.layouts[floorName] = cloneObj(overrides);
+  if (sharedSyncAvailable) pushSharedState();
+}
+
+function getEffectiveGrid(gridData, floorName) {
+  const overrides = loadLayout(floorName);
+  const grid = [];
+  for (let ri = 0; ri < gridData.length; ri++) {
+    const row = [];
+    for (let ci = 0; ci < gridData[ri].length; ci++) {
+      const key = ri + ',' + ci;
+      const val = overrides[key] !== undefined ? overrides[key] : gridData[ri][ci];
+      // Treat facility labels as empty, but keep room cells (R:xxx)
+      if (typeof val === 'string' && !val.includes('|') && val !== '0' && val !== 0 && !val.startsWith('R:') && !val.startsWith('W:')) {
+        row.push('0');
+      } else {
+        row.push(val);
+      }
+    }
+    grid.push(row);
+  }
+  return grid;
+}
+
+// ===== DRAG STATE =====
+let dragInfo = null; // { floor, row, col, seat, cellData }
+
+
+
+/* ══════════════════════════════════════════════════
+   White Block & Merge System - Global Variables
+   ══════════════════════════════════════════════════ */
+var insertMode = null;
+var selectedWhiteBlocks = [];
+var undoHistory18F = [];
+var undoHistory17F = [];
+
+function saveUndo(fl) {
+  var hist = fl === '18F' ? undoHistory18F : undoHistory17F;
+  hist.push(JSON.parse(JSON.stringify(loadLayout(fl))));
+  if (hist.length > 20) hist.shift();
+}
+function undoLast(fl) {
+  var hist = fl === '18F' ? undoHistory18F : undoHistory17F;
+  if (!hist.length) { alert('没有可撤销的操作'); return; }
+  saveLayout(fl, hist.pop());
+  if (fl === '18F') renderF18(); else renderF17();
+}
+function printFloor(fl) {
+  var panelId = fl === '18F' ? 'panel-f18' : 'panel-f17';
+  var panel = document.getElementById(panelId);
+  if (!panel) return;
+  var allPanels = document.querySelectorAll('.panel');
+  for (var i = 0; i < allPanels.length; i++) allPanels[i].classList.remove('printing');
+  panel.classList.add('active', 'printing');
+  var grid = panel.querySelector('[id$="-grid"]');
+  if (grid) {
+    grid.scrollTop = 0;
+    grid.scrollLeft = 0;
+  }
+  setTimeout(function() { window.print(); }, 300);
+  setTimeout(function() { panel.classList.remove('printing'); }, 1000);
+}
+function startInsertBlock(fl) {
+  insertMode = insertMode && insertMode.floor === fl ? null : { floor: fl };
+  if (fl === '18F') renderF18(); else renderF17();
+}
+function handleEmptyClick(e, fl, r, c) {
+  if (!insertMode || insertMode.floor !== fl) return;
+  saveUndo(fl);
+  var ov = loadLayout(fl);
+  ov[r+','+c] = 'W|1|1|';
+  saveLayout(fl, ov);
+  insertMode = null;
+  if (fl === '18F') renderF18(); else renderF17();
+}
+function parseWC(cell) {
+  if (typeof cell !== 'string' || !cell.startsWith('W|')) return null;
+  var p = cell.split('|');
+  return { w: parseInt(p[1]||1), h: parseInt(p[2]||1), name: p.slice(3).join('|') || '' };
+}
+function isWBlock(cell) { return typeof cell === 'string' && cell.startsWith('W|'); }
+
+function toggleSel(floor, r, c, e) {
+  if (!e.ctrlKey && !e.metaKey) selectedWhiteBlocks = [];
+  var idx = selectedWhiteBlocks.findIndex(function(b) { return b.floor===floor && b.row===r && b.col===c; });
+  if (idx >= 0) { selectedWhiteBlocks.splice(idx, 1); }
+  else { selectedWhiteBlocks.push({floor:floor,row:r,col:c}); }
+  if (floor==='18F') renderF18(); else renderF17();
+}
+function canMergeSelected() {
+  if (selectedWhiteBlocks.length < 2) return false;
+  var floor = selectedWhiteBlocks[0].floor;
+  if (!selectedWhiteBlocks.every(function(b){return b.floor===floor;})) return false;
+  var grid = floor === '18F' ? F18_GRID : F17_GRID;
+  var eff = getEffectiveGrid(grid, floor);
+  var rows = selectedWhiteBlocks.map(function(b){return b.row;});
+  var cols = selectedWhiteBlocks.map(function(b){return b.col;});
+  var minR = Math.min.apply(null, rows), maxR = Math.max.apply(null, rows);
+  var minC = Math.min.apply(null, cols), maxC = Math.max.apply(null, cols);
+  for (var rr = minR; rr <= maxR; rr++) {
+    for (var cc = minC; cc <= maxC; cc++) {
+      var found = selectedWhiteBlocks.some(function(b){return b.row===rr && b.col===cc;});
+      if (!found) return false;
+      var cell = eff[rr][cc];
+      var info = parseWC(cell);
+      if (!info || info.w !== 1 || info.h !== 1) return false;
+    }
+  }
+  return true;
+}
+function mergeSelected() {
+  if (!canMergeSelected()) { alert('请用Ctrl+点击选中相邻的白色方块后再合并'); return; }
+  var floor = selectedWhiteBlocks[0].floor;
+  saveUndo(floor);
+  var ov = loadLayout(floor);
+  var rows = selectedWhiteBlocks.map(function(b){return b.row;});
+  var cols = selectedWhiteBlocks.map(function(b){return b.col;});
+  var minR = Math.min.apply(null, rows), maxR = Math.max.apply(null, rows);
+  var minC = Math.min.apply(null, cols), maxC = Math.max.apply(null, cols);
+  var w = maxC - minC + 1, h = maxR - minR + 1;
+  ov[minR+','+minC] = 'W|' + w + '|' + h + '|';
+  for (var rr = minR; rr <= maxR; rr++) {
+    for (var cc = minC; cc <= maxC; cc++) {
+      if (!(rr === minR && cc === minC)) ov[rr+','+cc] = '0';
+    }
+  }
+  saveLayout(floor, ov);
+  selectedWhiteBlocks = [];
+  if (floor==='18F') renderF18(); else renderF17();
+}
+function splitBlock(floor, r, c) {
+  var ov = loadLayout(floor);
+  var cell = ov[r+','+c] || getOriginalCell(floor, r, c);
+  var info = parseWC(cell);
+  if (!info || (info.w===1 && info.h===1)) return;
+  saveUndo(floor);
+  var w = info.w, h = info.h;
+  delete ov[r+','+c];
+  for (var rr = r; rr < r+h; rr++)
+    for (var cc = c; cc < c+w; cc++)
+      ov[rr+','+cc] = 'W|1|1|';
+  saveLayout(floor, ov);
+  if (floor==='18F') renderF18(); else renderF17();
+}
+function renameBlock(floor, r, c) {
+  var ov = loadLayout(floor);
+  var cell = ov[r+','+c] || getOriginalCell(floor, r, c);
+  var info = parseWC(cell);
+  if (!info) return;
+  var panelId = floor === '18F' ? 'panel-f18-grid' : 'panel-f17-grid';
+  var el = document.querySelector('#' + panelId + ' [data-row="' + r + '"][data-col="' + c + '"]');
+  if (!el) return;
+  var oldDraggable = el.getAttribute('draggable');
+  el.innerText = info.name || '';
+  el.contentEditable = 'true';
+  el.setAttribute('draggable', 'false');
+  el.classList.add('editing-name');
+  el.style.whiteSpace = 'pre-wrap';
+  el.style.wordBreak = 'break-word';
+  el.style.outline = '2px solid #1890ff';
+  el.style.outlineOffset = '-2px';
+  el.style.backgroundColor = '#fffbe6';
+  el.style.width = '100%';
+  el.style.height = '100%';
+  el.style.minWidth = '100%';
+  el.style.minHeight = '100%';
+  el.focus();
+  var range = document.createRange();
+  range.selectNodeContents(el);
+  range.collapse(false);
+  var sel = window.getSelection();
+  sel.removeAllRanges();
+  sel.addRange(range);
+  function finish() {
+    var nn = el.innerText.trim();
+    el.contentEditable = 'false';
+    if (oldDraggable === null) el.removeAttribute('draggable'); else el.setAttribute('draggable', oldDraggable);
+    el.classList.remove('editing-name');
+    el.style.whiteSpace = '';
+    el.style.wordBreak = '';
+    el.style.outline = '';
+    el.style.outlineOffset = '';
+    el.style.backgroundColor = '';
+    el.style.width = '';
+    el.style.height = '';
+    el.style.minWidth = '';
+    el.style.minHeight = '';
+    el.onblur = null;
+    el.onkeydown = null;
+    if (nn === (info.name || '')) return;
+    saveUndo(floor);
+    ov[r+','+c] = 'W|' + info.w + '|' + info.h + '|' + nn;
+    saveLayout(floor, ov);
+    if (floor === '18F') renderF18(); else renderF17();
+  }
+  el.onblur = function() { setTimeout(finish, 100); };
+  el.onkeydown = function(e) {
+    if (e.key === 'Enter' && !e.shiftKey && !e.ctrlKey) { e.preventDefault(); finish(); }
+    if (e.key === 'Escape') { el.innerText = info.name || ''; finish(); }
+  };
+}
+function delBlock(floor, r, c) {
+  var ov = loadLayout(floor);
+  var cell = ov[r+','+c] || getOriginalCell(floor, r, c);
+  var info = parseWC(cell);
+  if (!info) return;
+  saveUndo(floor);
+  if (info.w>1||info.h>1) {
+    for (var rr=r; rr<r+info.h; rr++)
+      for (var cc=c; cc<c+info.w; cc++)
+        ov[rr+','+cc] = 'W|1|1|';
+  } else {
+    ov[r+','+c] = '0';
+  }
+  saveLayout(floor, ov);
+  selectedWhiteBlocks = [];
+  if (floor==='18F') renderF18(); else renderF17();
+}
+function showCMenu(e, floor, r, c) {
+  e.preventDefault(); e.stopPropagation();
+  var m = document.getElementById('fp-context-menu');
+  if (m) m.remove();
+  m = document.createElement('div');
+  m.id = 'fp-context-menu';
+  m.style.left = e.clientX + 'px';
+  m.style.top = e.clientY + 'px';
+  var cell = getEffectiveGrid((floor==='18F'?F18_GRID:F17_GRID), floor)[r][c];
+  var info = parseWC(cell);
+  if (!info) return;
+  if (info.w===1 && info.h===1) {
+    var cm = canMergeSelected();
+    m.innerHTML = '<button class="menu-item" '+(cm?'':'disabled')+' onclick="mergeSelected()">合并选中方块</button>';
+    m.innerHTML += '<button class="menu-item danger" onclick="delBlock(\''+floor+'\','+r+','+c+')">删除</button>';
+  } else {
+    m.innerHTML = '<button class="menu-item" onclick="renameBlock(\''+floor+'\','+r+','+c+')">编辑名称</button>';
+    m.innerHTML += '<button class="menu-item" onclick="splitBlock(\''+floor+'\','+r+','+c+')">拆分</button>';
+    m.innerHTML += '<button class="menu-item danger" onclick="delBlock(\''+floor+'\','+r+','+c+')">删除</button>';
+  }
+  document.body.appendChild(m);
+  m.style.display = 'block';
+  setTimeout(function() { document.addEventListener('click', function hm() { m.remove(); document.removeEventListener('click', hm); }); }, 0);
+}
+document.addEventListener('keydown', function(e) { if (e.key==='Escape') { var m=document.getElementById('fp-context-menu'); if(m) m.remove(); } });
+document.addEventListener('click', function(e) { if (!e.ctrlKey&&!e.metaKey) { var els=document.querySelectorAll('.fp-white-block.selected,.fp-merged-block.selected'); for(var i=0;i<els.length;i++)els[i].classList.remove('selected'); selectedWhiteBlocks=[]; } });
+
+/* Drag white/merged blocks */
+function dragStartW(e, floor, r, c) {
+  var el = e.target;
+  var cell = getEffectiveGrid((floor==='18F'?F18_GRID:F17_GRID), floor)[r][c];
+  var info = parseWC(cell);
+  if (!info) return;
+  dragInfo = { floor: floor, row: parseInt(r), col: parseInt(c), isWhite: true, info: info };
+  el.classList.add('dragging');
+  e.dataTransfer.effectAllowed = 'move';
+  e.dataTransfer.setData('text/plain', r+','+c);
+  var ghost = el.cloneNode(true);
+  ghost.style.cssText = ghost.style.cssText + ';position:absolute;top:-9999px;opacity:0.8;transform:scale(1.3);box-shadow:0 4px 12px rgba(0,0,0,.3);';
+  document.body.appendChild(ghost);
+  e.dataTransfer.setDragImage(ghost, ghost.offsetWidth/2, ghost.offsetHeight/2);
+  setTimeout(function(){document.body.removeChild(ghost);}, 0);
+}
+
+function renderFloorPlan(panelId, gridData, leaderList, floorName) {
+  const panel = document.getElementById(panelId);
+  if (!panel) return;
+  const effectiveGrid = getEffectiveGrid(gridData, floorName);
+  const numCols = effectiveGrid[0] ? effectiveGrid[0].length : 0;
+
+  let html = '<div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;flex-wrap:wrap;">';
+  html += '<span style="font-weight:600;color:#0f3460;font-size:14px;">\ud83d\uddb1\ufe0f \u62d6\u62fd\u8bf4\u660e\uff1a</span>';
+  html += '<span style="font-size:11px;color:#888;">\u6309\u4f4f\u5de5\u4f4d\u62d6\u52a8\u5230\u53e6\u4e00\u4e2a\u5de5\u4f4d\u6216\u7a7a\u683c\u5373\u53ef\u4ea4\u6362\u4f4d\u7f6e</span>';
+  html += '<button onclick="startInsertBlock(\'' + floorName + '\')" style="padding:4px 10px;border-radius:4px;cursor:pointer;font-size:11px;background:' + (insertMode && insertMode.floor === floorName ? '#e6f7ff' : '#fff') + ';border:1px solid ' + (insertMode && insertMode.floor === floorName ? '#1890ff' : '#d9d9d9') + ';color:' + (insertMode && insertMode.floor === floorName ? '#1890ff' : '#999') + '">\u2795 \u63d2\u5165\u7a7a\u767d\u5757</button>';
+  html += '<button onclick="resetLayout(\'' + floorName + '\')" style="margin-left:auto;padding:4px 10px;border:1px solid #d9d9d9;border-radius:4px;background:#fff;cursor:pointer;font-size:11px;color:#999;">\ud83d\udd04 \u91cd\u7f6e\u5e03\u5c40</button>';
+  html += '<button onclick="undoLast(\'' + floorName + '\')" style="padding:4px 10px;border:1px solid #d9d9d9;border-radius:4px;background:#fff;cursor:pointer;font-size:11px;color:#999;">\u21a9 \u64a4\u9500</button>';
+  html += '<button onclick="printFloor(\'' + floorName + '\')" style="padding:4px 12px;border:1px solid #0f3460;border-radius:4px;background:#0f3460;cursor:pointer;font-size:11px;color:#fff;">\ud83d\udda8\ufe0f \u6253\u5370</button>';
+  html += '</div>';
+
+  html += '<div style="display:flex;flex-wrap:wrap;gap:6px 12px;margin-bottom:12px;padding:8px 12px;background:#fafafa;border-radius:6px;font-size:11px;">';
+  html += '<span style="font-weight:600;color:#0f3460;margin-right:4px;">\u7ec4\u957f\u56fe\u4f8b\uff1a</span>';
+  leaderList.forEach(function(_a){var l=_a[0],c=_a[1];html+='<span style="display:inline-flex;align-items:center;gap:3px;"><span style="display:inline-block;width:14px;height:14px;border-radius:2px;background:'+c+';border:1px solid #ccc;"></span>'+l+'</span>';});
+  html += '<span style="display:inline-flex;align-items:center;gap:3px;margin-left:8px;"><span style="display:inline-block;width:14px;height:14px;border-radius:2px;background:#F0F0F0;border:1px solid #ccc;"></span>\u672a\u5206\u914d</span>';
+  html += '</div>';
+
+  var isSel = function(fl,rx,cx) { return selectedWhiteBlocks.some(function(b){return b.floor===fl&&b.row===rx&&b.col===cx;}); };
+
+  // Always use CSS Grid layout — guarantees seamless merging both horizontally AND vertically
+  html += '<div id="' + panelId + '-grid" style="overflow:auto;border:1px solid #ccc;display:grid;grid-template-columns:repeat(' + numCols + ', 26px);grid-auto-rows:26px;max-width:100%;">';
+  var processed = {};
+  // Pass 1: detect R: room blocks
+  var roomBlocks = [];
+  for (var ri = 0; ri < effectiveGrid.length; ri++) {
+    for (var ci = 0; ci < effectiveGrid[ri].length; ci++) {
+      var cellR = effectiveGrid[ri][ci], keyR = ri+','+ci;
+      if (typeof cellR==='string' && cellR.startsWith('R:') && !processed[keyR]) {
+        var rn = cellR.substring(2), w=1, h=1;
+        while (ci+w<effectiveGrid[ri].length && typeof effectiveGrid[ri][ci+w]==='string' && effectiveGrid[ri][ci+w].startsWith('R:') && effectiveGrid[ri][ci+w].substring(2)===rn) w++;
+        while (ri+h<effectiveGrid.length && typeof effectiveGrid[ri+h][ci]==='string' && effectiveGrid[ri+h][ci].startsWith('R:') && effectiveGrid[ri+h][ci].substring(2)===rn) h++;
+        for (var dr=0;dr<h;dr++) for(var dc=0;dc<w;dc++) processed[(ri+dr)+','+(ci+dc)]=true;
+        roomBlocks.push({name:rn,row:ri,col:ci,w:w,h:h});
+      }
+    }
+  }
+  roomBlocks.forEach(function(rb) { html += '<div class="fp-cell fp-room" style="grid-column:'+(rb.col+1)+' / span '+rb.w+';grid-row:'+(rb.row+1)+' / span '+rb.h+';" title="'+rb.name+'">'+rb.name+'</div>'; });
+  // Pass 2: detect W| merged blocks (w>1 || h>1) — mark all covered cells as processed so subsequent rows skip them (vertical seamless)
+  for (var ri = 0; ri < effectiveGrid.length; ri++) {
+    for (var ci = 0; ci < effectiveGrid[ri].length; ci++) {
+      var keyW = ri+','+ci;
+      if (processed[keyW]) continue;
+      var cellW2 = effectiveGrid[ri][ci];
+      if (typeof cellW2==='string' && cellW2.startsWith('W|')) {
+        var infW = parseWC(cellW2);
+        if (infW.w>1 || infW.h>1) {
+          for (var dr2=0; dr2<infW.h; dr2++) for(var dc2=0; dc2<infW.w; dc2++) processed[(ri+dr2)+','+(ci+dc2)]=true;
+          var fsW = Math.max(10, Math.min(20, Math.floor(infW.w*infW.h)));
+          html += '<div class="fp-cell fp-merged-block" style="grid-column:'+(ci+1)+' / span '+infW.w+';grid-row:'+(ri+1)+' / span '+infW.h+';" data-row="'+ri+'" data-col="'+ci+'" draggable="true" ondragstart="dragStartW(event,\''+floorName+'\','+ri+','+ci+')" ondragend="dragEnd(event)" oncontextmenu="showCMenu(event,\''+floorName+'\','+ri+','+ci+')" ondblclick="renameBlock(\''+floorName+'\','+ri+','+ci+')">';
+          if (infW.name) html += '<div class="merged-name" style="font-size:'+fsW+'px;">'+infW.name.replace(/\n/g,'<br>')+'</div>';
+          html += '</div>';
+        }
+      }
+    }
+  }
+  // Pass 3: render remaining single cells (seats, empty, single white blocks)
+  for (var ri = 0; ri < effectiveGrid.length; ri++) {
+    for (var ci = 0; ci < effectiveGrid[ri].length; ci++) {
+      var key2 = ri+','+ci;
+      if (processed[key2]) continue;
+      var c2 = effectiveGrid[ri][ci];
+      if (typeof c2==='string' && c2.startsWith('W|')) {
+        html += '<div class="fp-cell fp-white-block'+(isSel(floorName,ri,ci)?' selected':'')+'" style="grid-column:'+(ci+1)+';grid-row:'+(ri+1)+';" data-row="'+ri+'" data-col="'+ci+'" draggable="true" ondragstart="dragStartW(event,\''+floorName+'\','+ri+','+ci+')" ondragend="dragEnd(event)" oncontextmenu="showCMenu(event,\''+floorName+'\','+ri+','+ci+')" onclick="toggleSel(\''+floorName+'\','+ri+','+ci+',event)">&nbsp;</div>';
+      } else if (c2==='0'||c2===0) {
+        html += '<div class="fp-cell fp-empty" style="grid-column:'+(ci+1)+';grid-row:'+(ri+1)+';" data-row="'+ri+'" data-col="'+ci+'" ondragover="dragOver(event)" ondragleave="dragLeave(event)" ondrop="dragDrop(event,\''+floorName+'\','+ri+','+ci+')" onclick="handleEmptyClick(event,\''+floorName+'\','+ri+','+ci+')"></div>';
+      } else if (typeof c2==='string' && c2.startsWith('R:')) {
+        // already rendered in pass 1
+      } else if (typeof c2==='string' && c2.includes('|')) {
+        var p = c2.split('|');
+        html += '<div class="fp-cell fp-seat" style="grid-column:'+(ci+1)+';grid-row:'+(ri+1)+';background:'+(p[2]||'#FFF')+';" data-floor="'+floorName+'" data-seat="'+p[0]+'" data-leader="'+(p[1]||'')+'" data-row="'+ri+'" data-col="'+ci+'" draggable="true" ondragstart="dragStart(event,\''+floorName+'\','+ri+','+ci+')" ondragend="dragEnd(event)" ondragover="dragOver(event)" ondragleave="dragLeave(event)" ondrop="dragDrop(event,\''+floorName+'\','+ri+','+ci+')" title="'+floorName+' - \u5de5\u4f4d'+p[0]+' - '+(p[1]||'')+'\n\u62d6\u62fd\u53ef\u79fb\u52a8\u6b64\u5de5\u4f4d" onclick="showSeatDetail(\''+floorName+'\','+p[0]+',\''+(p[1]||'')+'\')" onmouseenter="enlargeCell(this)" onmouseleave="shrinkCell(this)">'+p[0]+'</div>';
+      } else {
+        html += '<div class="fp-cell fp-empty" style="grid-column:'+(ci+1)+';grid-row:'+(ri+1)+';" data-row="'+ri+'" data-col="'+ci+'" ondragover="dragOver(event)" ondragleave="dragLeave(event)" ondrop="dragDrop(event,\''+floorName+'\','+ri+','+ci+')" onclick="handleEmptyClick(event,\''+floorName+'\','+ri+','+ci+')"></div>';
+      }
+    }
+  }
+  html += '</div>';
+  panel.innerHTML = html;
+}
+
+// ── Drag Handlers ──
+function dragStart(e, floor, row, col) {
+  const el = e.target;
+  if (!el.classList.contains('fp-seat')) return;
+
+  const seat = el.dataset.seat;
+  const leader = el.dataset.leader;
+  dragInfo = { floor, row: parseInt(row), col: parseInt(col), seat, leader };
+
+  el.classList.add('dragging');
+  e.dataTransfer.effectAllowed = 'move';
+  e.dataTransfer.setData('text/plain', row + ',' + col);
+
+  // Set drag image to a small clone
+  const ghost = el.cloneNode(true);
+  ghost.style.position = 'absolute';
+  ghost.style.top = '-9999px';
+  ghost.style.opacity = '0.8';
+  ghost.style.transform = 'scale(1.3)';
+  ghost.style.boxShadow = '0 4px 12px rgba(0,0,0,.3)';
+  ghost.style.width = el.offsetWidth + 'px';
+  ghost.style.height = el.offsetHeight + 'px';
+  document.body.appendChild(ghost);
+  e.dataTransfer.setDragImage(ghost, ghost.offsetWidth / 2, ghost.offsetHeight / 2);
+  setTimeout(() => document.body.removeChild(ghost), 0);
+}
+
+function dragEnd(e) {
+  document.querySelectorAll('.fp-seat.dragging').forEach(el => el.classList.remove('dragging'));
+  document.querySelectorAll('.fp-seat.drag-over, .fp-empty.drag-over').forEach(el => el.classList.remove('drag-over'));
+  dragInfo = null;
+}
+
+function dragOver(e) {
+  e.preventDefault();
+  e.dataTransfer.dropEffect = 'move';
+  const el = e.currentTarget;
+  // Allow drop on seats and empties
+  if (el.classList.contains('fp-seat') || el.classList.contains('fp-empty')) {
+    el.classList.add('drag-over');
+  }
+}
+
+function dragLeave(e) {
+  e.currentTarget.classList.remove('drag-over');
+}
+
+function dragDrop(e, floor, row, col) {
+  e.preventDefault();
+  e.stopPropagation();
+  e.currentTarget.classList.remove('drag-over');
+
+  if (!dragInfo || dragInfo.row === row && dragInfo.col === col) return;
+  saveUndo(floor);
+
+  const overrides = loadLayout(floor);
+  const grid = arguments.callee._gridRef;
+
+  // Read effective grid from DOM
+  const panel = document.getElementById(floor === '18F' ? 'panel-f18' : 'panel-f17');
+  if (!panel) return;
+
+  // Swap in override map
+  const srcKey = dragInfo.row + ',' + dragInfo.col;
+  const dstKey = row + ',' + col;
+
+  const srcCell = overrides[srcKey] !== undefined ? overrides[srcKey] : getOriginalCell(floor, dragInfo.row, dragInfo.col);
+  const dstCell = overrides[dstKey] !== undefined ? overrides[dstKey] : getOriginalCell(floor, row, col);
+
+  // Swap
+  if (dstCell === '0' || dstCell === 0) {
+    // Move to empty: source becomes empty, dest gets source
+    overrides[srcKey] = '0';
+    overrides[dstKey] = srcCell;
+  } else {
+    // Swap two seats
+    overrides[srcKey] = dstCell;
+    overrides[dstKey] = srcCell;
+  }
+
+  // Clean up: remove overrides that match original
+  const origGrid = (floor === '18F') ? F18_GRID : F17_GRID;
+  for (const k of Object.keys(overrides)) {
+    const parts = k.split(',');
+    const r = parseInt(parts[0]), c = parseInt(parts[1]);
+    if (r < origGrid.length && c < origGrid[r].length && overrides[k] === origGrid[r][c]) {
+      delete overrides[k];
+    }
+  }
+
+  saveLayout(floor, overrides);
+
+  // Re-render both floor plans
+  if (floor === '18F') renderF18(); else renderF17();
+
+  dragInfo = null;
+}
+
+function getOriginalCell(floor, row, col) {
+  const grid = (floor === '18F') ? F18_GRID : F17_GRID;
+  if (row < grid.length && col < grid[row].length) {
+    const val = grid[row][col];
+    // Room cells (R:xxx) are not empty - keep them
+    if (typeof val === 'string' && val.startsWith('R:')) return val;
+    // Treat other non-seat cells as empty
+    if (typeof val === 'string' && !val.includes('|') && val !== '0') return '0';
+    return val;
+  }
+  return '0';
+}
+
+function resetLayout(floorName) {
+  if (confirm('确定要重置 ' + floorName + ' 的工位布局吗？所有手动调整将被清除。')) {
+    localStorage.removeItem('fp_layout_' + floorName);
+    if (floorName === '18F') renderF18(); else renderF17();
+  }
+}
+
+// ── Enlarge / Shrink ──
+function enlargeCell(el) {
+  if (el.classList.contains('dragging')) return;
+  el.style.transform = 'scale(1.6)';
+  el.style.zIndex = '100';
+  el.style.boxShadow = '0 4px 12px rgba(0,0,0,0.3)';
+  el.style.position = 'relative';
+  el.style.fontWeight = '900';
+  el.style.fontSize = '11px';
+  el.style.borderColor = '#333';
+}
+
+function shrinkCell(el) {
+  if (el.classList.contains('dragging')) return;
+  el.style.transform = 'scale(1)';
+  el.style.zIndex = '';
+  el.style.boxShadow = '';
+  el.style.position = '';
+  el.style.fontWeight = '500';
+  el.style.fontSize = '8px';
+  el.style.borderColor = '#e0e0e0';
+}
+
+// ── Seat Detail Modal ──
+function showSeatDetail(floor, seat, leader) {
+  const data = getData();
+  const entry = data.find(d => d.floor === floor && d.seat === seat);
+  if (!entry) return;
+
+  const key = floor + '-' + seat;
+  let modal = document.getElementById('seat-modal');
+  if (!modal) {
+    modal = document.createElement('div');
+    modal.id = 'seat-modal';
+    modal.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.5);display:flex;align-items:center;justify-content:center;z-index:10000;';
+    document.body.appendChild(modal);
+  }
+
+  const leaderList = (floor === '18F') ? F18_LEADERS : F17_LEADERS;
+  let leaderOptions = '';
+  leaderList.forEach(([name, clr]) => {
+    const sel = (name === leader) ? ' selected' : '';
+    leaderOptions += '<option value="' + name + '" data-color="' + clr + '"' + sel + '>' + name + '</option>';
+  });
+  const unsel = (leader === '\u672a\u5206\u914d' || !leader) ? ' selected' : '';
+  leaderOptions += '<option value="\u672a\u5206\u914d" data-color="#F0F0F0"' + unsel + '>\u672a\u5206\u914d</option>';
+
+  const currentColorEntry = leaderList.find(function(_a) { return _a[0] === leader; });
+  let currentColor = currentColorEntry ? currentColorEntry[1] : (leader === '\u672a\u5206\u914d' ? '#F0F0F0' : '#FFFFFF');
+
+  modal.innerHTML = '<div style="background:#fff;border-radius:12px;padding:24px;min-width:380px;max-width:440px;box-shadow:0 8px 32px rgba(0,0,0,0.2);">' +
+    '<h3 style="margin:0 0 16px;color:#0f3460;font-size:18px;">\ud83d\udd0d \u5de5\u4f4d\u8be6\u60c5</h3>' +
+    '<div style="display:flex;gap:12px;margin-bottom:12px;">' +
+      '<div style="flex:1;"><label style="font-size:12px;color:#888;">\u697c\u5c42</label><div style="font-size:15px;font-weight:600;">' + floor + '</div></div>' +
+      '<div style="flex:1;"><label style="font-size:12px;color:#888;">\u5de5\u4f4d\u53f7</label><div style="font-size:15px;font-weight:600;">' + seat + '</div></div>' +
+    '</div>' +
+    '<div style="margin-bottom:12px;">' +
+      '<label style="font-size:12px;color:#888;">\u7ec4\u957f <span style="color:#1890ff;">(\u6539\u53d8\u7ec4\u957f\u5c06\u81ea\u52a8\u66f4\u65b0\u8272\u5757\u989c\u8272)</span></label>' +
+      '<div style="display:flex;gap:8px;align-items:center;">' +
+        '<select id="modal-leader" onchange="onLeaderChange(\'' + floor + '\')" style="flex:1;padding:8px;border:1px solid #d9d9d9;border-radius:6px;font-size:14px;">' + leaderOptions + '</select>' +
+        '<span id="modal-color-preview" style="display:inline-block;width:28px;height:28px;border-radius:4px;background:' + currentColor + ';border:1px solid #ccc;flex-shrink:0;" title="\u5f53\u524d\u8272\u5757\u989c\u8272"></span>' +
+      '</div>' +
+    '</div>' +
+    '<div style="margin-bottom:12px;"><label style="font-size:12px;color:#888;">\u56e2\u961f</label><input id="modal-team" style="width:100%;padding:8px;border:1px solid #d9d9d9;border-radius:6px;font-size:14px;" value="' + (entry.team || '') + '"></div>' +
+    '<div style="margin-bottom:16px;"><label style="font-size:12px;color:#888;">\u72b6\u6001</label><select id="modal-status" style="width:100%;padding:8px;border:1px solid #d9d9d9;border-radius:6px;font-size:14px;"><option value="used"' + (entry.status === 'used' ? ' selected' : '') + '>\u5df2\u4f7f\u7528</option><option value="unused"' + (entry.status === 'unused' ? ' selected' : '') + '>\u672a\u4f7f\u7528</option></select></div>' +
+    '<div style="display:flex;gap:8px;justify-content:flex-end;">' +
+      '<button onclick="closeSeatModal()" style="padding:8px 16px;border:1px solid #d9d9d9;border-radius:6px;background:#fff;cursor:pointer;font-size:13px;">\u53d6\u6d88</button>' +
+      '<button onclick="saveSeatDetail(\'' + key + '\',\'' + floor + '\')" style="padding:8px 16px;border:none;border-radius:6px;background:#52c41a;color:#fff;cursor:pointer;font-size:13px;font-weight:500;">\ud83d\udcbe \u4fdd\u5b58\u5e76\u540c\u6b65\u8272\u5757</button>' +
+    '</div></div>';
+
+  modal.style.display = 'flex';
+  modal.onclick = function(e) { if (e.target === modal) closeSeatModal(); };
+}
+
+function onLeaderChange(floor) {
+  const sel = document.getElementById('modal-leader');
+  if (!sel) return;
+  const opt = sel.options[sel.selectedIndex];
+  const color = opt.getAttribute('data-color') || '#F0F0F0';
+  const preview = document.getElementById('modal-color-preview');
+  if (preview) preview.style.background = color;
+}
+
+function closeSeatModal() {
+  const modal = document.getElementById('seat-modal');
+  if (modal) modal.style.display = 'none';
+}
+
+function saveSeatDetail(key, floor) {
+  const leader = document.getElementById('modal-leader').value;
+  const team = document.getElementById('modal-team').value;
+  const status = document.getElementById('modal-status').value;
+  const parts = key.split('-');
+  const seatNum = parseInt(parts[1]);
+  
+  modifiedData[key] = { floor: parts[0], seat: seatNum, leader, team, status };
+  localStorage.setItem('workspace_mods', JSON.stringify(modifiedData));
+  
+  const leaderList = (floor === '18F') ? F18_LEADERS : F17_LEADERS;
+  const leaderEntry = leaderList.find(function(_a) { return _a[0] === leader; });
+  const newColor = leaderEntry ? leaderEntry[1] : '#F0F0F0';
+  
+  const gridData = (floor === '18F') ? F18_GRID : F17_GRID;
+  const overrides = loadLayout(floor);
+  const effectiveGrid = getEffectiveGrid(gridData, floor);
+  let found = false;
+  
+  for (let ri = 0; ri < effectiveGrid.length && !found; ri++) {
+    for (let ci = 0; ci < effectiveGrid[ri].length && !found; ci++) {
+      const cell = effectiveGrid[ri][ci];
+      if (typeof cell === 'string' && cell.includes('|')) {
+        const p = cell.split('|');
+        if (parseInt(p[0]) === seatNum) {
+          overrides[ri + ',' + ci] = seatNum + '|' + leader + '|' + newColor;
+          found = true;
+        }
+      }
+    }
+  }
+  
+  if (!found) {
+    for (let ri = 0; ri < gridData.length && !found; ri++) {
+      for (let ci = 0; ci < gridData[ri].length && !found; ci++) {
+        const cell = String(gridData[ri][ci]);
+        if (cell.includes('|')) {
+          const p = cell.split('|');
+          if (parseInt(p[0]) === seatNum) {
+            overrides[ri + ',' + ci] = seatNum + '|' + leader + '|' + newColor;
+            found = true;
+          }
+        }
+      }
+    }
+  }
+  
+  saveLayout(floor, overrides);
+  closeSeatModal();
+  renderAll();
+  if (floor === '18F') { renderF18(); } else { renderF17(); }
+}
+
+// ── Render Entry Points ──
+function renderF18() { renderFloorPlan('panel-f18', F18_GRID, F18_LEADERS, '18F'); }
+function renderF17() { renderFloorPlan('panel-f17', F17_GRID, F17_LEADERS, '17F'); }
+
+init();
+
+
+
+/* ══════════════════════════════════════════════════
+   White Block & Merge System
+   ══════════════════════════════════════════════════ */
+</script>
+
+</body>
+</html>
